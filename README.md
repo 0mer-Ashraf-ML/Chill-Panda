@@ -1,1 +1,1 @@
-# bitewiz
+# chill-panda

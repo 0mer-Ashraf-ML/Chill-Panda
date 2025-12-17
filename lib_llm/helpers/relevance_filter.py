@@ -34,7 +34,7 @@ class RelevanceFilter:
         }
         
         # Wake words for activation
-        self.wake_words = ['bitewise', 'bite wise', 'hey bitewise', 'hi bitewise', 'hello bitewise','bitey', 'bite', 'hey bite', 'hey bitey', 'hi bite','hi bitey', 'hello bite','hello bitey','hi bitewiz', 'hello bitewiz','hello bite wiz', 'hi bite wiz','click_event','bitewiz','bite wiz']
+        self.wake_words = ['bitewise', 'bite wise', 'hey bitewise', 'hi bitewise', 'hello bitewise','bitey', 'bite', 'hey bite', 'hey bitey', 'hi bite','hi bitey', 'hello bite','hello bitey','hi chill-panda', 'hello chill-panda','hello bite wiz', 'hi bite wiz','click_event','chill-panda','bite wiz']
         
         # Strong activation phrases
         self.activation_phrases = {
