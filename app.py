@@ -89,9 +89,14 @@ async def chat_invoke(websocket: WebSocket):
 async def websocket_endpoint(
     websocket: WebSocket,
     source: SourceEnum,
-    language: LanguageEnum | None = None 
+    language: LanguageEnum | None = None,
+    session_id: str | None = None  # Optional UUID from frontend
 ):
-    guid = str(uuid.uuid4())
+    # Use provided session_id if valid, otherwise generate new UUID
+    if session_id and len(session_id) == 36:  # Basic UUID format validation
+        guid = session_id
+    else:
+        guid = str(uuid.uuid4())
 
     print(f"WebSocket connection established via => {source.value} with UID => {guid} & language => {language.value}")
 
@@ -121,7 +126,7 @@ async def websocket_endpoint(
 
 
     websocket_manager = WebsocketManager( guid, modelInstance , dispatcher, websocket , source )
-    speech_to_text = SpeechToTextDeepgram( guid , dispatcher ,  websocket , DEEPGRAM_API_KEY )
+    speech_to_text = SpeechToTextDeepgram( guid , dispatcher ,  websocket , DEEPGRAM_API_KEY, language=language.value )
     large_language_model = LargeLanguageModel( guid , modelInstance , dispatcher, source.value )
     # text_to_speeech = TextToSpeechElevenLabs( guid  , dispatcher , ELEVENLABS_API_KEY )
     text_to_speeech = TextToSpeechMinimax( guid  , dispatcher , MINIMAX_API_KEY )

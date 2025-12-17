@@ -12,7 +12,10 @@ class SourceEnum(str, Enum):
 
 class LanguageEnum(str, Enum):
     french = "french"
-    english = "english"
-    spanish = "spanish"
-    chinese = "chinese"
-    japanese = "japanese"
+    english = "en"
+    # spanish = "spanish"
+    # chinese = "chinese"
+    # japanese = "japanese"
+    # en = "en"
+    zh_hk = "zh-HK"
+    zh_tw = "zh-TW"

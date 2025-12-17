@@ -1,5 +1,5 @@
 let chat_socket;
-let language = "english";
+let language = "en";
 let audioQueue = [];
 let isPlaying = false;
 let refreshMsgText = false;
@@ -10,6 +10,66 @@ const llmResponseDiv = document.getElementById('llm-msg');
 const sendBtn = document.getElementById("user-text-msg");
 let audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
+// UUID Management
+function generateUUID() {
+  if (crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older browsers
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function getStoredUUID() {
+  return localStorage.getItem('voice_engine_uuid');
+}
+
+function setStoredUUID(uuid) {
+  localStorage.setItem('voice_engine_uuid', uuid);
+  const uuidField = document.getElementById('uuid-field');
+  if (uuidField) uuidField.value = uuid;
+}
+
+function initUUID() {
+  const uuidField = document.getElementById('uuid-field');
+  const generateBtn = document.getElementById('generate-uuid-btn');
+
+  // Load existing UUID or generate new one
+  let currentUUID = getStoredUUID();
+  if (!currentUUID) {
+    currentUUID = generateUUID();
+    setStoredUUID(currentUUID);
+  }
+
+  if (uuidField) {
+    uuidField.value = currentUUID;
+
+    // Allow manual editing
+    uuidField.removeAttribute('readonly');
+    uuidField.addEventListener('change', (e) => {
+      const val = e.target.value.trim();
+      if (val && val.length === 36) { // Basic validation
+        setStoredUUID(val);
+        // Optional: Reload page to apply new UUID immediately
+        // window.location.reload(); 
+      }
+    });
+  }
+
+  if (generateBtn) {
+    generateBtn.addEventListener('click', () => {
+      if (confirm("Generate new Session ID? This will start a fresh conversation.")) {
+        const newUUID = generateUUID();
+        setStoredUUID(newUUID);
+        window.location.reload(); // Reload to reconnect with new UUID
+      }
+    });
+  }
+
+  return currentUUID;
+}
 
 async function getMicrophone() {
   const userMedia = await navigator.mediaDevices.getUserMedia({
@@ -127,7 +187,7 @@ function playAudio(data) {
 
 function getWebSocketURL(path = "") {
   var protocolPrefix =
-  window.location.protocol === "https:" ? "wss:" : "ws:";
+    window.location.protocol === "https:" ? "wss:" : "ws:";
   var host = window.location.host; // Includes hostname and port
 
   return protocolPrefix + "//" + host + path;
@@ -137,32 +197,53 @@ function addUserMessage(message) {
   userMsgDiv.innerHTML = message;
 }
 
-function addLlmMessage(response) {  
-  if(refreshMsgText && response){
-    llmResponseDiv.innerHTML = response; 
+function addLlmMessage(response) {
+  if (refreshMsgText && response) {
+    llmResponseDiv.innerHTML = response;
     refreshMsgText = false;
-  }  
-  else{
-    if(response){
-      llmResponseDiv.innerHTML = llmResponseDiv.innerHTML += response; 
+  }
+  else {
+    if (response) {
+      llmResponseDiv.innerHTML = llmResponseDiv.innerHTML += response;
     }
   }
 }
 
-function sendMessage(){
+function sendMessage() {
   let user_msg = inputField.value;
-  if(user_msg){
-    let data_sent = JSON.stringify({ "user_msg" : user_msg })
-    chat_socket.send( data_sent )
+  if (user_msg) {
+    let data_sent = JSON.stringify({ "user_msg": user_msg })
+    chat_socket.send(data_sent)
     inputField.value = "";
     addUserMessage(user_msg);
   }
 }
 
 window.addEventListener("load", () => {
+  // Initialize UUID
+  const sessionUUID = initUUID();
+
+  // Initialize Language
+  const languageSelect = document.getElementById('language-select');
+  if (languageSelect) {
+    // Load saved language or default to English
+    const savedLang = localStorage.getItem('voice_engine_language');
+    if (savedLang) {
+      languageSelect.value = savedLang;
+      language = savedLang;
+    }
+
+    languageSelect.addEventListener('change', (e) => {
+      language = e.target.value;
+      localStorage.setItem('voice_engine_language', language);
+      // Reload to reconnect with new language
+      window.location.reload();
+    });
+  }
+
   // URL for WebSocket connection via Phone / Web / Audio Stream
-  // const websocketUrl = getWebSocketURL(`/ws/phone?language=${language}&lat=${26.28745}&long=${-80.2033278}`);
-  const websocketUrl = getWebSocketURL(`/ws/phone?language=${language}`);
+  // Add UUID to query params
+  const websocketUrl = getWebSocketURL(`/ws/phone?language=${language}&session_id=${sessionUUID}`);
   console.log({ websocketUrl });
 
   socket = new WebSocket(websocketUrl);
@@ -173,38 +254,37 @@ window.addEventListener("load", () => {
     await start(socket);
   };
 
-
   socket.onmessage = (event) => {
     let event_parsed = JSON.parse(event.data);
     console.log(`Data-Rcvd : ${JSON.stringify(event_parsed)}`);
-    
-    if (event_parsed.is_text == true){
-      console.log("---> Text" , {event_parsed})
+
+    if (event_parsed.is_text == true) {
+      console.log("---> Text", { event_parsed })
       let msg = event_parsed.msg
-      if(event_parsed.is_transcription == true){ 
-        addUserMessage(msg) 
+      if (event_parsed.is_transcription == true) {
+        addUserMessage(msg)
       }
-      else{
-        if(event_parsed.is_end){
+      else {
+        if (event_parsed.is_end) {
           refreshMsgText = true;
-        } 
-        addLlmMessage(msg) 
+        }
+        addLlmMessage(msg)
       }
     }
-    else{
+    else {
       console.log("[AUDIO_RECIEVED]", event_parsed)
-      if(event_parsed.is_clear_event == true){
+      if (event_parsed.is_clear_event == true) {
         console.log("[CLEAR_BUFFER_EVENT_RECIEVED] - Clearing audio queue")
         audioQueue = [];
         isPlaying = false; // Reset playing state
       }
-      else{
+      else {
         let audio_data = event_parsed.audio;
-        if(audio_data) {
+        if (audio_data) {
           console.log(`[AUDIO_QUEUED] Adding audio to queue, current queue length: ${audioQueue.length}`);
           audioQueue.push(audio_data);
           // Always try to play next audio when new audio is received
-          playNextAudio();      
+          playNextAudio();
         } else {
           console.log("[AUDIO_ERROR] No audio data in message");
         }

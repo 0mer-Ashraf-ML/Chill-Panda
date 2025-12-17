@@ -7,11 +7,12 @@ from lib_infrastructure.dispatcher import ( Dispatcher, Message, MessageHeader, 
 
 
 class SpeechToTextDeepgram : 
-    def __init__(self  , guid , dispatcher: Dispatcher , socket_conext , api_key ) -> None:
+    def __init__(self  , guid , dispatcher: Dispatcher , socket_conext , api_key, language="en" ) -> None:
         self.guid = guid
         self.dispatcher = dispatcher
         self.api_key = api_key
         self.socket_context = socket_conext
+        self.language = language
         self.deepgram_config = DeepgramClientOptions( options={"keepalive": "true"} )
         self.deepgram = DeepgramClient(api_key= self.api_key , config=self.deepgram_config )
         self.dg_connection = self.deepgram.listen.live.v("1")
@@ -19,7 +20,8 @@ class SpeechToTextDeepgram :
             smart_format = True,
             model = "nova-2-general",
             punctuate=True,
-            language="en-US",
+            # language="en-US",
+            language=self.language,
             channels=1,
             interim_results=True,
             utterance_end_ms=1000,
