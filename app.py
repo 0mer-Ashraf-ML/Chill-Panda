@@ -46,8 +46,62 @@ async def lifespan(app: FastAPI):
     print("Disconnected from memory://")
 
 
+# OpenAPI Tags metadata for grouping endpoints
+tags_metadata = [
+    {
+        "name": "Chat",
+        "description": "AI-powered chat operations with Chill Panda. Send messages and receive mindful responses.",
+    },
+    {
+        "name": "Sessions",
+        "description": "Manage user sessions and conversation history.",
+    },
+    {
+        "name": "Health",
+        "description": "System health and status endpoints.",
+    },
+    {
+        "name": "WebSocket",
+        "description": "Real-time WebSocket connections for voice and text streaming.",
+    },
+]
+
 # app initalization & setup
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="Chill Panda API",
+    description="""
+🐼 **Chill Panda Backend API**
+
+A mindful AI companion for mental wellness, featuring:
+- **RAG-powered chat** with wisdom from The Chill Panda book
+- **Real-time voice/text streaming** via WebSocket
+- **Session management** for conversation history
+- **MongoDB integration** for persistent storage
+
+## Authentication
+Most endpoints require an API key passed in the `X-API-Key` header.
+
+## WebSocket Connections
+Connect to `/ws/{source}` for real-time voice/text interaction:
+- **source**: `device` or `phone`
+- **language**: `en`, `french`, `zh-HK`, `zh-TW` (optional query param)
+- **session_id**: UUID for session continuity (optional query param)
+
+Example: `ws://localhost:8000/ws/device?language=en&session_id=123e4567-e89b-12d3-a456-426614174000`
+    """,
+    version="1.0.0",
+    contact={
+        "name": "Chill Panda Support",
+        "email": "support@chillpanda.com",
+    },
+    license_info={
+        "name": "Proprietary",
+    },
+    openapi_tags=tags_metadata,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
+)
 app.mount("/public", StaticFiles(directory="public"), name="static")
 templates = Jinja2Templates(directory="templates")
 dispatcher = Dispatcher()
@@ -157,16 +211,89 @@ async def websocket_endpoint(
             )
 
 
-@app.get('/')
-def home():
+@app.get(
+    '/api/info',
+    tags=["Health"],
+    summary="Get API information",
+    description="Returns basic information about the Chill Panda API including version and available features.",
+    response_description="API status and feature list",
+    responses={
+        200: {
+            "description": "API information",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Chill Panda Backend Running",
+                        "version": "1.0.0",
+                        "features": ["RAG", "MongoDB", "Pinecone", "Chat History"]
+                    }
+                }
+            }
+        }
+    }
+)
+def api_info():
+    """
+    Get basic API information and status.
+    
+    Returns the API version and list of available features.
+    """
     return {
         'message': 'Chill Panda Backend Running',
         'version': '1.0.0',
         'features': ['RAG', 'MongoDB', 'Pinecone', 'Chat History']
     }
 
-@app.get('/health')
+
+@app.get(
+    '/health',
+    tags=["Health"],
+    summary="Health check",
+    description="""
+Check the health status of the Chill Panda API and its dependencies.
+
+This endpoint verifies:
+- API server is running
+- MongoDB database is connected and responsive
+    """,
+    response_description="Health status of the API and its dependencies",
+    responses={
+        200: {
+            "description": "Service health status",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "healthy": {
+                            "summary": "Healthy response",
+                            "value": {
+                                "status": "healthy",
+                                "database": "connected",
+                                "service": "Chill Panda API"
+                            }
+                        },
+                        "unhealthy": {
+                            "summary": "Unhealthy response",
+                            "value": {
+                                "status": "unhealthy",
+                                "database": "disconnected",
+                                "error": "Connection timeout"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 def health_check():
+    """
+    Check API and database health.
+    
+    Returns:
+    - **status**: 'healthy' or 'unhealthy'
+    - **database**: 'connected' or 'disconnected'
+    - **error**: Error message if unhealthy (optional)
+    """
     try:
         # Check MongoDB connection
         mongodb_manager.client.admin.command('ping')

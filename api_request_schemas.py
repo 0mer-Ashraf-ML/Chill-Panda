@@ -1,21 +1,34 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from enum import Enum
 
+
 class invoke_llm_schema(BaseModel):
-    guid : str
-    user_msg : str
+    """Schema for invoking LLM via WebSocket."""
+    guid: str = Field(..., description="Unique session identifier (UUID)")
+    user_msg: str = Field(..., description="User's message to send to the LLM")
 
 
 class SourceEnum(str, Enum):
+    """
+    Connection source for WebSocket streaming.
+    
+    - **device**: Web browser or desktop application
+    - **phone**: Mobile phone application
+    """
     device = "device"
     phone = "phone"
 
+
 class LanguageEnum(str, Enum):
+    """
+    Supported languages for conversation.
+    
+    - **en**: English
+    - **french**: French
+    - **zh-HK**: Traditional Chinese (Hong Kong)
+    - **zh-TW**: Traditional Chinese (Taiwan)
+    """
     french = "french"
     english = "en"
-    # spanish = "spanish"
-    # chinese = "chinese"
-    # japanese = "japanese"
-    # en = "en"
     zh_hk = "zh-HK"
     zh_tw = "zh-TW"
