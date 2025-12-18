@@ -18,6 +18,8 @@ from lib_tts.text_to_speech_minimax import TextToSpeechMinimax
 from lib_infrastructure.dispatcher import ( Dispatcher , Message , MessageHeader , MessageType )
 from lib_infrastructure.helpers.global_event_logger import GlobalLoggerAsync
 from contextlib import asynccontextmanager
+from app.api import router
+from app.mongodb_manager import mongodb_manager
 
 # loading .env configs
 load_dotenv()
@@ -50,6 +52,7 @@ app.mount("/public", StaticFiles(directory="public"), name="static")
 templates = Jinja2Templates(directory="templates")
 dispatcher = Dispatcher()
 
+app.include_router(router)
 
 # managing dispatcher connect event on app startup
 
@@ -154,6 +157,35 @@ async def websocket_endpoint(
             )
 
 
+@app.get('/')
+def home():
+    return {
+        'message': 'Chill Panda Backend Running',
+        'version': '1.0.0',
+        'features': ['RAG', 'MongoDB', 'Pinecone', 'Chat History']
+    }
+
+@app.get('/health')
+def health_check():
+    try:
+        # Check MongoDB connection
+        mongodb_manager.client.admin.command('ping')
+        return {
+            'status': 'healthy',
+            'database': 'connected',
+            'service': 'Chill Panda API'
+        }
+    except Exception as e:
+        return {
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e)
+        }
+
+@app.on_event("shutdown")
+def shutdown_event():
+    """Cleanup on shutdown"""
+    mongodb_manager.close()
 
 
 if __name__ == "__main__":
