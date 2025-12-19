@@ -66,7 +66,7 @@ class TextToSpeechMinimax:
         self.buffer_timer = None
         self.buffer_lock = asyncio.Lock()
         self.min_buffer_size = 8
-        self.max_buffer_time = 1.5
+        self.max_buffer_time = 2.5 # 1.5
         self.is_flushing = False
         
         # Interruption tracking
