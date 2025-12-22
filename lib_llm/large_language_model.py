@@ -5,6 +5,7 @@ from lib_llm.helpers.llm import LLM
 from lib_llm.helpers.tools import *
 import asyncio
 from lib_infrastructure.dispatcher import (Dispatcher, MessageType, Message, MessageHeader)
+from lib_llm.helpers.crisis_detector import CrisisDetector
 
 
 tools = [
@@ -25,7 +26,18 @@ class LargeLanguageModel:
         self.source = source
         self.is_audio_required = True
         self.is_generating = False
+        self.crisis_detector = CrisisDetector(llm.api_key)
 
+
+    async def _check_for_crisis(self, text: str):
+        is_critical = await self.crisis_detector.detect_crisis(text)
+        await self.dispatcher.broadcast(
+            self.guid,
+            Message(
+                MessageHeader(MessageType.CRISIS_DETECTED),
+                data={"is_critical": is_critical}
+            )
+        )
 
     async def process(self, message: LLM.LLMMessage):
         # ONLY send clear buffer for USER messages (new user input)
@@ -33,6 +45,9 @@ class LargeLanguageModel:
         # DO NOT send clear buffer for TOOL or SYSTEM messages
         if message.role == LLM.Role.USER:
             self.is_generating = True
+            # Fire and forget crisis detection to not block the main response
+            asyncio.create_task(self._check_for_crisis(message.content))
+            
             await self.dispatcher.broadcast(
                 self.guid,
                 Message(
@@ -94,7 +109,7 @@ class LargeLanguageModel:
             else:
                 words = words.lower()
                 llm_words.append(words)
-
+                # words = words.replace("{", "").replace("}", "").replace("response", "").replace("is_critical", "").replace("true", "").replace("false", "")
                 await self.dispatcher.broadcast(
                     self.guid,
                     Message(
@@ -107,13 +122,17 @@ class LargeLanguageModel:
 
         self.is_generating = False
         words = "".join(llm_words)
+        # words = words.replace("```json", "").replace("```", "")
+        # words = json.loads(words)
+        # print("------------","LargeLanguageModel",words,"------------")
         await self.dispatcher.broadcast(
             self.guid,
             Message(
                 MessageHeader(
                     MessageType.TTS_FLUSH
                 ),
-                data=words,
+                # data=words["response"],
+                data=words
             ),
         )
 

@@ -29,6 +29,7 @@ class MessageType(enum.Enum):
     IS_DORMANT = 21
     SPEECH_DETECTED = 22 
     SPEECH_ENDED = 23
+    CRISIS_DETECTED = 24
 
 
 class MessageHeader:

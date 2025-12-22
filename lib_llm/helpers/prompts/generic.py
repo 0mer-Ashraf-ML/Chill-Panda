@@ -106,4 +106,11 @@ Guidelines:
 - Avoid long explanations unless specifically asked
 - Respond in a conversational tone
 - Always respond in the a single line( less than 150 character )
+
 """
+# Always return the response in the following JSON Object:
+# output format:
+# {
+#     "response": "your response"
+#     "is_critical": "true" or "false", // true when user is in crisis (self-harm/suicide)
+# }

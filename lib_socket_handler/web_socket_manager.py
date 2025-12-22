@@ -217,6 +217,16 @@ class WebsocketManager(Disposable):
                 await self.send( llm_msg_data )
 
 
+    async def websocket_put_crisis_event(self):
+        async with await self.dispatcher.subscribe(
+            self.guid, MessageType.CRISIS_DETECTED
+        ) as subscriber:
+            async for event in subscriber:
+                is_critical = event.message.data.get("is_critical", False)
+                crisis_data = { "is_critical": is_critical }
+                await self.send( crisis_data )
+
+
 
     async def run_async(self):
         await self.open()
@@ -236,6 +246,8 @@ class WebsocketManager(Disposable):
             asyncio.create_task(self.websocket_put_llm_structured_data()),
             # check for sending dormant event in LLM 
             asyncio.create_task(self.websocket_put_dormant_event()),
+            # check for sending crisis event
+            asyncio.create_task(self.websocket_put_crisis_event()),
             # check web socket clear buffer event
             asyncio.create_task(self.websocket_put_clear_event()),
             # check for close connection events

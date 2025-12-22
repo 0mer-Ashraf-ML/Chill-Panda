@@ -118,12 +118,13 @@ class LLM:
             stream=True,
             tools=self.tools,
             tool_choice="auto",
-            temperature=0.3
+            temperature=0.3,
+            # response_format={ "type": "json_object" }
         )
 
         words = []
         tool_calls_buffer = {}
-
+        content = ""
 
         async for part in stream:
             choice = part.choices[0]
@@ -133,6 +134,7 @@ class LLM:
             if delta.content:
                 words.append(delta.content)
                 yield delta.content
+
 
             # Collect streaming tool calls
             if delta.tool_calls:
@@ -182,11 +184,16 @@ class LLM:
                 # Reset after tool call is handled
                 tool_calls_buffer = {}
 
+        # json_content="".join(words).strip().replace("\n", " ")
+        # json_content = json_content.replace("```json", "").replace("```", "")
+        # json_content = json.loads(json_content)
+        # print("------------","LLM",json_content,"------------")
 
         if words:
             message = LLM.LLMMessage(
                 role=LLM.Role.ASSISTANT,
                 content="".join(words).strip().replace("\n", " "),
+                # content=json_content["response"]
             )
             self.add_message(message)
 
