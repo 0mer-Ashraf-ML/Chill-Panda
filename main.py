@@ -25,6 +25,7 @@ LANGUAGES = {
         "system_message": SYSTEM_PROMPT + " Please respond in English.",
         "welcome_message": "Hello! I'm Chill Panda 🐼, your calm and supportive companion. I'm here to listen and support you. How are you feeling today?",
         "error_message": "Sorry, I encountered an error. Please try again.",
+        "clear_chat": "🗑️ Clear Chat",
     },
     "Chinese (Simplified)": {
         "title": "🐼 放松熊猫 - 心理健康伙伴",
@@ -33,6 +34,7 @@ LANGUAGES = {
         "system_message": SYSTEM_PROMPT + " 请用简体中文回复。",
         "welcome_message": "您好！我是放松熊猫🐼，您冷静而支持的伙伴。我在这里倾听和支持您。您今天感觉如何？",
         "error_message": "抱歉，我遇到了错误。请重试。",
+        "clear_chat": "🗑️ 清除聊天",
     },
     "Chinese (Traditional)": {
         "title": "🐼 放鬆熊貓 - 心理健康夥伴",
@@ -41,6 +43,16 @@ LANGUAGES = {
         "system_message": SYSTEM_PROMPT + " 請用繁體中文回覆。",
         "welcome_message": "您好！我是放鬆熊貓🐼，您冷靜而支持的夥伴。我在這裡傾聽和支持您。您今天感覺如何？",
         "error_message": "抱歉，我遇到了錯誤。請重試。",
+        "clear_chat": "🗑️ 清除聊天",
+    },
+    "Arabic": {
+        "title": "🐼 الباندا الهادئة - رفيق الصحة النفسية",
+        "language_selector": "اختر اللغة:",
+        "chat_placeholder": "شارك ما يدور في ذهنك...",
+        "system_message": SYSTEM_PROMPT + " الرجاء الرد باللغة العربية.",
+        "welcome_message": "مرحباً! أنا الباندا الهادئة 🐼، رفيقك الهادئ والداعم. أنا هنا للاستماع ودعمك. كيف تشعر اليوم؟",
+        "error_message": "عذراً، واجهت خطأ. يرجى المحاولة مرة أخرى.",
+        "clear_chat": "🗑️ مسح المحادثة",
     }
 }
 
@@ -108,24 +120,19 @@ def main():
     # Get current language configuration
     lang_config = LANGUAGES[st.session_state.selected_language]
     
+    # Apply RTL layout for Arabic
+    if st.session_state.selected_language == "Arabic":
+        st.markdown("""
+        <style>
+        .stChatMessage, .stMarkdown, .stTextInput {
+            direction: rtl;
+            text-align: right;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    
     # App title
     st.title(lang_config["title"])
-    
-    # # Mental health disclaimer
-    # with st.expander("🚨 Important Mental Health Information", expanded=False):
-    #     st.warning("""
-    #     **Chill Panda is a supportive companion, not a replacement for professional mental health care.**
-        
-    #     If you're experiencing a mental health crisis or having thoughts of self-harm, please contact:
-    #     - Emergency services (911, 112, etc.)
-    #     - National Suicide Prevention Lifeline: 988
-    #     - Crisis Text Line: Text HOME to 741741
-    #     - Your local emergency mental health services
-        
-    #     Chill Panda provides emotional support and encouragement but does not give medical advice.
-    #     """)
-    
-    # st.markdown("---")
     
     # Sidebar for language selection
     with st.sidebar:
@@ -146,7 +153,7 @@ def main():
         handle_language_change()
         
         # Clear chat button
-        if st.button("🗑️ Clear Chat"):
+        if st.button(lang_config["clear_chat"]):
             st.session_state.messages = []
             st.rerun()
     
