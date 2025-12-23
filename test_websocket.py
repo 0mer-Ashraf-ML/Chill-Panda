@@ -21,7 +21,7 @@ from typing import Optional
 HOST = "localhost"
 PORT = 3000
 SOURCE = "device"  # or "phone"
-LANGUAGE = "en"    # "en", "zh-HK", "zh-TW"
+LANGUAGE = "zh-TW"    # "en", "zh-HK", "zh-TW"
 AUDIO_OUTPUT_DIR = "test_socket_audio"
 
 class WebSocketTester:
