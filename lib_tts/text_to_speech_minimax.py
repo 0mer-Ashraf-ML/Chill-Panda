@@ -31,7 +31,8 @@ class TextToSpeechMinimax:
         if voice_id is None:
             voice_id = "English_expressive_narrator"
         elif voice_id == "zh-HK":
-            voice_id = "moss_audio_c86cf59f-7c89-4c8b-97a8-2e77807295e9"
+            # voice_id = "moss_audio_c86cf59f-7c89-4c8b-97a8-2e77807295e9"
+            voice_id = "cantonese_audio_ad39f71a-efe2-4881-858e-09b1c1b39ce4"
         elif voice_id == "zh-TW":
             voice_id = "hunyin_6"
         else:
