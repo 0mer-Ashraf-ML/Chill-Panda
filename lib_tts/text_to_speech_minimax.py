@@ -23,7 +23,7 @@ class TextToSpeechMinimax:
         dispatcher: Dispatcher,
         api_key,
         voice_id="English_expressive_narrator",
-        model="speech-2.6-turbo"
+        model="speech-2.6-hd"
     ):
         self.guid = guid
         self.dispatcher = dispatcher
