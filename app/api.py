@@ -195,6 +195,9 @@ async def get_user_sessions(
     Get all chat sessions belonging to a user.
     """
     sessions = mongodb_manager.get_user_sessions(user_id)
+    # Add user_id to each session to match SessionInfo schema
+    for session in sessions:
+        session["user_id"] = user_id
     return sessions
 
 
