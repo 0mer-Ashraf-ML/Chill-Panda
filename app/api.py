@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from .auth import verify_key
+from fastapi import APIRouter, HTTPException, Path, Query
 from .schemas import (
     ChatRequest, ChatResponse, ConversationHistory, SessionInfo,
     DeleteResponse, ErrorResponse
@@ -54,7 +53,7 @@ saved to MongoDB for session continuity.
         }
     }
 )
-async def chat(req: ChatRequest, _=Depends(verify_key)):
+async def chat(req: ChatRequest):
     """
     Send a chat message and receive an AI-powered response from Chill Panda.
     
@@ -134,8 +133,7 @@ async def get_conversation(
         ...,
         description="The unique session identifier (UUID format)",
         examples=["123e4567-e89b-12d3-a456-426614174000"]
-    ),
-    _=Depends(verify_key)
+    )
 ):
     """
     Retrieve all messages from a conversation session.
@@ -188,8 +186,7 @@ async def get_user_sessions(
         ...,
         description="The unique user identifier",
         examples=["user_abc123"]
-    ),
-    _=Depends(verify_key)
+    )
 ):
     """
     Get all chat sessions belonging to a user.
@@ -242,8 +239,7 @@ async def delete_session(
         ...,
         description="The session ID to delete",
         examples=["123e4567-e89b-12d3-a456-426614174000"]
-    ),
-    _=Depends(verify_key)
+    )
 ):
     """
     Delete a session and all its associated messages.
