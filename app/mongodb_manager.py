@@ -131,6 +131,22 @@ class MongoDBManager:
         except Exception as e:
             return False
     
+    def retrieve_from_pdf_knowledge(self, query: str, top_k: int = 3):
+        """
+        Retrieve relevant text from a PDF knowledge base collection.
+        Returns a list of dicts with "text" key.
+        """
+        try:
+            collection = self.db.get_collection("pdf_knowledge")  # create this collection in MongoDB
+            results = list(
+                collection.find(
+                    {"text": {"$regex": query, "$options": "i"}}
+                ).limit(top_k)
+            )
+            return [{"text": r["text"]} for r in results]
+        except Exception:
+            return []
+        
     def close(self):
         """Close MongoDB connection"""
         if self.client:

@@ -1,110 +1,108 @@
 import streamlit as st
 import requests
-from PIL import Image
-import io
 from datetime import datetime
+import uuid
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # -------------------------------
 # Config
 # -------------------------------
-VISION_API_URL = "http://localhost:8000/vision/analyze"
-BIOMETRIC_API_URL = "http://localhost:8000/biometric/ingest"
-
-st.set_page_config(page_title="Chill Panda Demo", page_icon="🐼", layout="centered")
+VISION_API_URL = "http://localhost:8000/api/v1/vision/analyze"
+BIOMETRIC_API_URL = "http://localhost:8000/api/v1/biometric/ingest"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+st.set_page_config(
+    page_title="Chill Panda – Phase 2 Demo",
+    page_icon="🐼",
+    layout="centered"
+)
 
 st.title("🐼 Chill Panda – Phase 2 Demo")
 
+# -------------------------------
+# User / Session
+# -------------------------------
+user_id = st.text_input("User ID", "test_user")
+
+# Generate persistent session_id
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+session_id = st.session_state.session_id
+
+st.caption(f"Session ID: `{session_id}`")
+
 # ============================================================
-# SECTION 1: FACIAL EMOTION DETECTION (VISION)
+# SECTION 1: FACIAL EMOTION DETECTION
 # ============================================================
 
 st.header("📷 Facial Emotion Detection")
 
-st.markdown(
-    """
-Upload a face image and get an **emotional stress analysis** from the Chill Panda backend.
-"""
-)
-
-user_id = st.text_input("User ID", "test_user")
-
 uploaded_file = st.file_uploader(
     "Upload an image (JPEG/PNG)",
-    type=["jpg", "jpeg", "png"],
-    key="vision_upload"
+    type=["jpg", "jpeg", "png"]
 )
 
-if uploaded_file and user_id:
-    st.image(uploaded_file, caption="Uploaded Image", width=600)
+if uploaded_file and st.button("Analyze Emotion"):
+    with st.spinner("Analyzing facial emotion..."):
+        try:
+            response = requests.post(
+                VISION_API_URL,
+                data={
+                    "user_id": user_id,
+                    "session_id": session_id
+                },
+                files={
+                    "image": (
+                        uploaded_file.name,
+                        uploaded_file.read(),
+                        uploaded_file.type
+                    )
+                },
+                timeout=30,
+            )
 
-    if st.button("Analyze Emotion"):
-        with st.spinner("Analyzing facial emotion..."):
-            try:
-                image_bytes = uploaded_file.read()
+            if response.status_code == 200:
+                payload = response.json()
+                vision_data = payload["data"]
 
-                response = requests.post(
-                    VISION_API_URL,
-                    params={"user_id": user_id},
-                    files={"image": ("image.jpg", image_bytes, uploaded_file.type)},
-                    timeout=30,
-                )
+                st.success("✅ Analysis complete!")
 
-                if response.status_code == 200:
-                    data = response.json()
-                    st.success("✅ Analysis complete!")
+                st.subheader("Result")
+                st.write(f"**Stress Level:** {vision_data['stress_level']}")
+                st.write(f"**Emotional State:** {vision_data['emotional_state']}")
+                st.write(f"**Confidence:** {vision_data['confidence']:.2f}")
+                st.write(f"**Source:** {payload['source']}")
+                recommendations = vision_data.get("recommendations", [])
 
-                    st.subheader("Result")
-                    st.write(f"**Stress Level:** {data.get('stress_level')}")
-                    st.write(f"**Emotional State:** {data.get('emotional_state')}")
-                    st.write(f"**Confidence:** {data.get('confidence'):.2f}")
-                    st.write(f"**Source:** {data.get('source')}")
-                    st.write(f"**Timestamp:** {data.get('created_at')}")
-                else:
-                    st.error(f"Error: {response.status_code} - {response.text}")
+                if recommendations:
+                    st.subheader("🧘 Personalized Recommendations")
+                    for rec in recommendations:
+                        st.markdown(f"- {rec}")
 
-            except Exception as e:
-                st.error(f"Exception: {e}")
+            else:
+                st.error(f"{response.status_code}: {response.text}")
+
+        except Exception as e:
+            st.error(f"Exception: {e}")
 
 # ============================================================
-# SECTION 2: BIOMETRIC INTEGRATION (PHASE 2)
+# SECTION 2: BIOMETRIC STRESS MONITORING
 # ============================================================
 
 st.divider()
 st.header("❤️ Biometric Stress Monitoring")
 
-st.markdown(
-    """
-Simulate **near real-time biometric data** from wearables  
-(Apple Health / Google Fit / Any wearable via abstraction).
-"""
-)
-
-# -------------------------------
-# Simulated Biometric Inputs
-# -------------------------------
 col1, col2 = st.columns(2)
 
 with col1:
-    heart_rate = st.slider(
-        "Heart Rate (BPM)",
-        min_value=40,
-        max_value=160,
-        value=72
-    )
+    heart_rate = st.slider("Heart Rate (BPM)", 40, 160, 72)
 
 with col2:
-    hrv = st.slider(
-        "Heart Rate Variability (ms)",
-        min_value=5,
-        max_value=100,
-        value=35
-    )
+    hrv = st.slider("Heart Rate Variability (ms)", 5, 100, 35)
 
-timestamp = datetime.utcnow().isoformat()
-
-# -------------------------------
-# Submit Biometric Data
-# -------------------------------
 if st.button("Send Biometric Data"):
     with st.spinner("Sending biometric data..."):
         try:
@@ -112,29 +110,39 @@ if st.button("Send Biometric Data"):
                 BIOMETRIC_API_URL,
                 data={
                     "user_id": user_id,
+                    "session_id": session_id,
                     "heart_rate": heart_rate,
                     "hrv": hrv
                 },
-                timeout=15,
+                timeout=60,
             )
 
             if response.status_code == 200:
-                data = response.json()["data"]
-                st.success("✅ Biometric data ingested successfully!")
+                payload = response.json()
+
+                st.success("✅ Biometric data ingested")
 
                 st.subheader("Biometric Result")
-                st.write(f"**Heart Rate:** {data.get('heart_rate')} bpm")
-                st.write(f"**HRV:** {data.get('hrv')} ms")
-                st.write(f"**Stress Event Detected:** {data.get('stress_event')}")
-                st.write(f"**Timestamp:** {data.get('timestamp')}")
+                st.write(f"**Heart Rate:** {heart_rate} bpm")
+                st.write(f"**HRV:** {hrv} ms")
+                st.write(f"**Stress Event Detected:** {payload['stress_event']}")
+                st.write(f"**Source:** {payload['source']}")
 
-                if data.get("stress_event"):
+                # ✅ NEW: Show recommendations if stressed
+                recommendations = payload.get("recommendations", [])
+
+                if payload["stress_event"]:
                     st.warning("⚠️ Stress spike detected! Wellness intervention triggered.")
+
+                    if recommendations:
+                        st.subheader("🧘 Personalized Recommendations")
+                        for rec in recommendations:
+                            st.markdown(f"- {rec}")
                 else:
-                    st.info("🧘 Biometrics look normal. No intervention needed.")
+                    st.info("🧘 Biometrics normal. No intervention needed.")
 
             else:
-                st.error(f"Error: {response.status_code} - {response.text}")
+                st.error(f"{response.status_code}: {response.text}")
 
         except Exception as e:
             st.error(f"Exception: {e}")
