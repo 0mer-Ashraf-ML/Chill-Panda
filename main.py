@@ -12,7 +12,7 @@ from lib_stt.speech_to_text_deepgram import SpeechToTextDeepgram
 from lib_llm.helpers.llm import LLM
 from lib_llm.helpers.prompt_generator import PromptGenerator
 from lib_llm.large_language_model import LargeLanguageModel
-from lib_tts.text_to_speech_deepgram import TextToSpeechDeepgram
+# from lib_tts.text_to_speech_deepgram import TextToSpeechDeepgram
 from lib_tts.text_to_speech_elevenlabs import TextToSpeechElevenLabs
 from lib_tts.text_to_speech_minimax import TextToSpeechMinimax
 from lib_infrastructure.dispatcher import ( Dispatcher , Message , MessageHeader , MessageType )
@@ -199,12 +199,20 @@ async def websocket_endpoint(
             asyncio.create_task(websocket_manager.run_async()),
         ]
 
-        await asyncio.gather(*tasks)
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+        for task in pending:
+            task.cancel()
+        
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        for task in done:
+            task.result()
     except asyncio.CancelledError:
         await websocket_manager.dispose()
     except Exception as e:
         await websocket_manager.dispose()
-        raise e
+        # raise e
     finally:
         await dispatcher.broadcast(
             guid , Message(MessageHeader(MessageType.CALL_ENDED), "Call ended") 
@@ -317,5 +325,10 @@ def shutdown_event():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
-    print(f"Server Up At : http://localhost:{PORT}/")
+    while True:
+        try:
+            uvicorn.run(app, host="0.0.0.0", port=PORT)
+            print(f"Server Up At : http://localhost:{PORT}/")
+        except Exception as e:
+            print(f"Server Down At : http://localhost:{PORT}/")
+            print(e)
