@@ -11,4 +11,7 @@ test.py/
 /test.py/
 .venv
 *.pcm
+*.pyc
+.venv
+.env
 main.log
