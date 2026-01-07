@@ -1,0 +1,4 @@
+.env
+*.pcm
+*.pyc
+.venv
