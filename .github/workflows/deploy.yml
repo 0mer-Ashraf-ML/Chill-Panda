@@ -1,0 +1,68 @@
+name: Deploy FastAPI
+
+on:
+  push:
+    branches: [main]  # Added main branch too
+ 
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.SERVER_SSH_KEY }}
+    
+    - name: Add server to known hosts
+      run: ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+    
+    - name: Deploy to server
+      run: |
+        ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          set -e
+          
+          # Navigate to app directory
+          cd Chill-Panda/
+          
+          # Get latest code with proper conflict resolution
+          echo "Fetching latest changes..."
+          git pull origin main
+          
+          # Activate conda environment
+          source .venv/bin/activate
+          
+          # Install/update dependencies only if requirements.txt changed
+          if git diff --name-only HEAD@{1} HEAD | grep -q "requirements.txt"; then
+            echo "requirements.txt has changed, installing dependencies..."
+            pip install -r requirements.txt
+          else
+            echo "requirements.txt unchanged, skipping dependency installation"
+          fi
+
+          # Kill the old FastAPI app process (if any)
+          echo "Ensuring port 8000 is free..."
+          pid=$(pgrep -f 'uvicorn app.main:app --host 0.0.0.0 --port 8000' || true)
+          echo "Found PID: $pid"
+          if [ -n "$pid" ] && [ "$pid" != "" ]; then
+            echo "Killing old FastAPI process (PID: $pid)"
+            kill -9 $pid
+            sleep 2
+          else
+            echo "No existing FastAPI process found"
+          fi
+          
+          # Verify port is actually free
+          if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo "Warning: Port 8000 still in use, attempting to free it..."
+            lsof -ti:8000 | xargs kill -9 || true
+            sleep 2
+          fi
+          
+          # Start application with proper uvicorn command
+          echo "Starting application..."
+          nohup python3 main.py > main.log 2>&1 &
+        EOF
