@@ -16,12 +16,14 @@ import base64
 import os
 from datetime import datetime
 from typing import Optional
+from api_request_schemas import RoleEnum
 
 # Configuration
 HOST = "localhost"
-PORT = 3000
+PORT = 8000
 SOURCE = "device"  # or "phone"
 LANGUAGE = "en"    # "en", "zh-HK", "zh-TW"
+ROLE = RoleEnum.loyal_best_friend
 AUDIO_OUTPUT_DIR = "test_socket_audio"
 
 class WebSocketTester:
@@ -31,12 +33,14 @@ class WebSocketTester:
         port: int = PORT,
         source: str = SOURCE,
         language: str = LANGUAGE,
+        role: RoleEnum = ROLE,
         session_id: Optional[str] = None
     ):
         self.host = host
         self.port = port
         self.source = source
         self.language = language
+        self.role = role
         self.session_id = session_id or str(uuid.uuid4())
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
         self.audio_chunk_count = 0
@@ -65,7 +69,10 @@ class WebSocketTester:
         
     @property
     def ws_url(self) -> str:
-        return f"ws://{self.host}:{self.port}/ws/{self.source}?language={self.language}&session_id={self.session_id}"
+        url = f"ws://{self.host}:{self.port}/ws/{self.source}?language={self.language}&session_id={self.session_id}"
+        if self.role:
+            url += f"&role={self.role.value}"
+        return url
     
     async def connect(self) -> bool:
         """Connect to the WebSocket server."""

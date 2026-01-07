@@ -1,7 +1,7 @@
 # external imports
 import os , uuid , asyncio
 from dotenv import load_dotenv
-from api_request_schemas import (SourceEnum , LanguageEnum)
+from api_request_schemas import (SourceEnum , LanguageEnum, RoleEnum)
 from fastapi import FastAPI, WebSocket , Request
 from fastapi.websockets import WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -85,9 +85,10 @@ Most endpoints require an API key passed in the `X-API-Key` header.
 Connect to `/ws/{source}` for real-time voice/text interaction:
 - **source**: `device` or `phone`
 - **language**: `en`, `french`, `zh-HK`, `zh-TW` (optional query param)
+- **role**: `loyal_best_friend`, `caring_parent`, `coach`, `funny_friend` (optional query param)
 - **session_id**: UUID for session continuity (optional query param)
 
-Example: `ws://localhost:8000/ws/device?language=en&session_id=123e4567-e89b-12d3-a456-426614174000`
+Example: `ws://localhost:8000/ws/device?language=en&role=coach&session_id=123e4567-e89b-12d3-a456-426614174000`
     """,
     version="1.0.0",
     contact={
@@ -147,6 +148,7 @@ async def websocket_endpoint(
     websocket: WebSocket,
     source: SourceEnum,
     language: LanguageEnum | None = None,
+    role: RoleEnum | None = None,
     session_id: str | None = None  # Optional UUID from frontend
 ):
     # Use provided session_id if valid, otherwise generate new UUID
@@ -155,9 +157,13 @@ async def websocket_endpoint(
     else:
         guid = str(uuid.uuid4())
 
-    print(f"WebSocket connection established via => {source.value} with UID => {guid} & language => {language.value}")
+    print(f"WebSocket connection established via => {source.value} with UID => {guid} & language => {language.value if language else 'en'} & role => {role.value if role else 'None'}")
 
-    prompt_generator = PromptGenerator(language)
+    prompt_generator = PromptGenerator(language, role)
+    print("\nPrompt Being Used:")
+    print("\n**START**")
+    print(str(prompt_generator))
+    print("\n**END**")
     modelInstance = LLM(guid , prompt_generator, OPENAI_API_KEY)
     # You can now use the 'language' variable in your logic as needed
 

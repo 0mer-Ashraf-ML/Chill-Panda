@@ -179,6 +179,46 @@ class RAGChat:
         except Exception as e:
             # Fallback response
             return "I apologize, but I'm having trouble accessing my wisdom right now. Please try again, and remember to breathe deeply and stay calm. 🐼"
+    
+    def generate_streaming_response(self, user_message: str, conversation_history: List[Dict] = None):
+        """Generate streaming response using OpenAI's stream capability"""
+        
+        # Get relevant context from the book
+        context = self.get_relevant_context(user_message)
+        
+        # Prepare messages for OpenAI
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT}
+        ]
+        
+        # Add conversation history if available
+        if conversation_history:
+            for msg in conversation_history[-6:]:  # Last 6 messages for context
+                messages.append({"role": msg["role"], "content": msg["content"]})
+        
+        # Add context if found
+        if context:
+            context_message = f"{context}\n\nBased on the above wisdom from The Chill Panda book, and as the Chill Panda, respond to: {user_message}"
+            messages.append({"role": "user", "content": context_message})
+        else:
+            # If no relevant context, use general response
+            messages.append({"role": "user", "content": user_message})
+        
+        try:
+            stream = client.chat.completions.create(
+                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                messages=messages,
+                temperature=0.7,
+                max_tokens=500,
+                stream=True
+            )
+            
+            for chunk in stream:
+                if chunk.choices[0].delta.content is not None:
+                    yield chunk.choices[0].delta.content
+        
+        except Exception as e:
+            yield "I apologize, but I'm having trouble accessing my wisdom right now. Please try again, and remember to breathe deeply and stay calm. 🐼"
 
 # Initialize RAG chat instance
 rag_chat = RAGChat()
@@ -186,3 +226,7 @@ rag_chat = RAGChat()
 def generate_ai_reply(user_message: str, language: str, conversation_history: List[Dict] = None) -> str:
     """Generate AI reply using RAG system"""
     return rag_chat.generate_response(user_message, conversation_history)
+
+def generate_streaming_ai_reply(user_message: str, language: str, conversation_history: List[Dict] = None):
+    """Generate streaming AI reply using RAG system"""
+    return rag_chat.generate_streaming_response(user_message, conversation_history)

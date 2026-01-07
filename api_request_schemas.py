@@ -32,3 +32,13 @@ class LanguageEnum(str, Enum):
     english = "en"
     zh_hk = "zh-HK"
     zh_tw = "zh-TW"
+
+
+class RoleEnum(str, Enum):
+    """
+    Supported roles for the AI persona.
+    """
+    loyal_best_friend = "loyal_best_friend"
+    caring_parent = "caring_parent"
+    coach = "coach"
+    funny_friend = "funny_friend"

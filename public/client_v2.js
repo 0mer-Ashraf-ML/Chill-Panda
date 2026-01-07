@@ -1,5 +1,6 @@
 let chat_socket;
 let language = "en";
+let role = "loyal_best_friend";
 let audioQueue = [];
 let isPlaying = false;
 let refreshMsgText = false;
@@ -130,7 +131,7 @@ function stopAudio() {
     }
     currentAudioSource = null;
   }
-  
+
   // Clear the audio queue
   audioQueue = [];
   isPlaying = false;
@@ -174,10 +175,10 @@ function playAudio(data) {
   const source = audioContext.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(audioContext.destination);
-  
+
   // Track current audio source for interruption
   currentAudioSource = source;
-  
+
   source.onended = () => {
     console.log("Audio chunk finished playing");
     if (currentAudioSource === source) {
@@ -241,7 +242,22 @@ window.addEventListener("load", () => {
     });
   }
 
-  const websocketUrl = getWebSocketURL(`/ws/phone?language=${language}&session_id=${sessionUUID}`);
+  const roleSelect = document.getElementById('role-select');
+  if (roleSelect) {
+    const savedRole = localStorage.getItem('voice_engine_role');
+    if (savedRole) {
+      roleSelect.value = savedRole;
+      role = savedRole;
+    }
+
+    roleSelect.addEventListener('change', (e) => {
+      role = e.target.value;
+      localStorage.setItem('voice_engine_role', role);
+      window.location.reload();
+    });
+  }
+
+  const websocketUrl = getWebSocketURL(`/ws/phone?language=${language}&role=${role}&session_id=${sessionUUID}`);
   console.log({ websocketUrl });
 
   socket = new WebSocket(websocketUrl);
