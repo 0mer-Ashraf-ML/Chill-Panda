@@ -160,10 +160,10 @@ async def websocket_endpoint(
     print(f"WebSocket connection established via => {source.value} with UID => {guid} & language => {language.value if language else 'en'} & role => {role.value if role else 'None'}")
 
     prompt_generator = PromptGenerator(language, role)
-    print("\nPrompt Being Used:")
-    print("\n**START**")
-    print(str(prompt_generator))
-    print("\n**END**")
+    # print("\nPrompt Being Used:")
+    # print("\n**START**")
+    # print(str(prompt_generator))
+    # print("\n**END**")
     modelInstance = LLM(guid , prompt_generator, OPENAI_API_KEY)
     # You can now use the 'language' variable in your logic as needed
 
