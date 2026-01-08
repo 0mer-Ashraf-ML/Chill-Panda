@@ -205,12 +205,20 @@ async def websocket_endpoint(
             asyncio.create_task(websocket_manager.run_async()),
         ]
 
-        await asyncio.gather(*tasks)
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+        for task in pending:
+            task.cancel()
+        
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        for task in done:
+            task.result()
     except asyncio.CancelledError:
         await websocket_manager.dispose()
     except Exception as e:
         await websocket_manager.dispose()
-        raise e
+        # raise e
     finally:
         await dispatcher.broadcast(
             guid , Message(MessageHeader(MessageType.CALL_ENDED), "Call ended") 
