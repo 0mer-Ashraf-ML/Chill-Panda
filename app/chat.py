@@ -111,6 +111,10 @@ RESTRICTIONS
 Do not lecture. Be conversational.
 
 If the user is in crisis (self-harm/suicide), provide immediate standard crisis resources and disengage from the playful persona to be serious and directive.
+
+Important: 
+
+Max Token is 300. So don't write more than 300 tokens in a single response. 
 """
 
 class RAGChat:
@@ -171,7 +175,7 @@ class RAGChat:
                 model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
                 messages=messages,
                 temperature=0.7,
-                max_tokens=500,
+                max_tokens=300,
             )
             
             return response.choices[0].message.content.strip()
@@ -209,7 +213,7 @@ class RAGChat:
                 model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
                 messages=messages,
                 temperature=0.7,
-                max_tokens=500,
+                max_tokens=300,
                 stream=True
             )
             
