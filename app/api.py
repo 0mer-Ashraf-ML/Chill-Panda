@@ -77,7 +77,7 @@ async def chat_stream(req: ChatRequest):
             conversation_history=history
         ):
             full_reply += chunk
-            yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            yield f"data: {json.dumps({'reply': chunk,'session_id': req.session_id,'is_end': False})}\n\n"
             await asyncio.sleep(0) # Yield control
 
         # Save assistant message once complete
