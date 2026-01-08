@@ -11,3 +11,4 @@ test.py/
 /test.py/
 .venv
 *.pcm
+main.log
