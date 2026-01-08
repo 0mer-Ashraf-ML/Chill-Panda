@@ -1,0 +1,454 @@
+/* @import url(https://fonts.googleapis.com/css?family=Montserrat); */
+@import url("https://fonts.googleapis.com/css2?family=Arimo:wght@400;600;700");
+@import url("https://fonts.googleapis.com/css2?family=Inter");
+
+body {
+  color: white;
+  display: flex;
+  align-items: center;
+  font-family: "Inter", sans-serif;
+  justify-content: center;
+  flex-direction: column;
+  height: 90vh;
+  background-color: #000;
+  padding-top: 100px;
+}
+
+.content {
+  display: flex;
+  height: 30vh;
+  position: relative;
+  align-items: center;
+}
+
+.mic-checkbox {
+  display: none;
+}
+
+.mic-checkbox:checked+.mic-button {
+  transform: rotateY(180deg);
+}
+
+/* .button-container {
+  perspective: 500px;
+  -moz-perspective: 500px;
+  -webkit-perspective: 500px;
+} */
+
+.mic-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  width: 200px;
+  border-radius: 100%;
+  transition: transform 0.4s;
+  border: 2px solid #47aca9;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  -moz-transform-style: preserve-3d;
+  position: relative;
+}
+
+.button-message,
+.mic {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -moz-backface-visibility: hidden;
+}
+
+.button-message {
+  position: absolute;
+  width: 50px;
+  color: #fff;
+  font-family: "Arimo", sans-serif;
+  font-weight: 700;
+  font-size: 25px;
+  text-align: center;
+  line-height: 20px;
+  z-index: 2;
+  transform: rotateY(0deg);
+  pointer-events: none;
+  left: 58px;
+  top: 71px;
+}
+
+.mic-button-loader {
+  position: absolute;
+  height: 202px;
+  width: 200px;
+  background-color: transparent;
+  transform: rotateY(180deg);
+  top: -61px;
+  left: -101px;
+}
+
+.mic-checkbox:checked+.mic-button>.mic>.mic-button-loader {
+  border-top: 2.5px solid #13ef95;
+  border-radius: 100%;
+  animation: borderLoader 1.3s 0.2s ease-in-out infinite;
+}
+
+.mic {
+  position: relative;
+  top: -17px;
+  border: 20px solid #47aca9;
+  height: 48px;
+  width: 0;
+  border-radius: 45px;
+  transform: rotateY(180deg);
+}
+
+.mic:after,
+.mic:before,
+.mic-base {
+  position: absolute;
+}
+
+.mic:after {
+  content: "";
+  top: 16px;
+  left: -30px;
+  height: 57px;
+  width: 50px;
+  background-color: transparent;
+  border: 5px solid #47aca9;
+  border-bottom-left-radius: 102px;
+  border-bottom-right-radius: 110px;
+  border-top: 0;
+}
+
+.mic:before {
+  content: "";
+  top: 77px;
+  left: -2px;
+  border-bottom: 18px solid #47aca9;
+  border-left: 3px solid #47aca9;
+  border-right: 3px solid #47aca9;
+}
+
+.mic-base {
+  top: 95px;
+  left: -14px;
+  border-bottom: 7px solid #47aca9;
+  border-left: 15px solid #47aca9;
+  border-right: 15px solid #47aca9;
+}
+
+@keyframes borderLoader {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(359deg);
+  }
+}
+
+#captions {
+  color: rgb(237, 237, 242);
+  font-size: 24px;
+  font-family: "Inter", sans-serif;
+  margin: 10px 0;
+  text-align: center;
+}
+
+#llm-captions {
+  color: rgb(237, 237, 242);
+  font-size: 24px;
+  font-family: "Inter", sans-serif;
+  margin: 10px 0;
+  text-align: center;
+}
+
+
+h1 {
+  font-family: "Arimo", sans-serif;
+  font-size: 40px;
+  margin-top: 60px;
+  letter-spacing: -0.02em;
+  opacity: 1;
+  text-align: center;
+}
+
+.button-container {
+  display: flex;
+  gap: 16px;
+}
+
+.info-button {
+  display: flex;
+  align-items: center;
+  color: black;
+  height: 40px;
+  border-radius: 4px;
+  padding: 0 16px;
+  margin-top: 32px;
+  font-family: "Arimo", sans-serif;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.sign-up {
+  color: white;
+  position: relative;
+  background-origin: border-box;
+  background-image: linear-gradient(90deg, #201cff -91.5%, #13ef95 80.05%);
+  box-shadow: 2px 1000px 1px var(--md-code-background) inset;
+  z-index: 1;
+}
+
+.sign-up::before {
+  content: "";
+  border-radius: 4px;
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  left: 1px;
+  background-color: black;
+  z-index: -1;
+}
+
+.docs {
+  background-color: white;
+}
+
+.docs::after {
+  font-family: FontAwesome;
+  font-weight: 900;
+  content: "\f061";
+  margin-right: -4px;
+  margin-left: 8px;
+}
+
+.click {
+  position: absolute;
+  height: 150px;
+  left: 20px;
+  top: -144px;
+}
+
+
+.logo {
+  height: 200px;
+  width: 200px;
+}
+
+
+
+
+
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+}
+
+
+
+.chat {
+  margin: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  max-width: 70%;
+  color: #fff;
+  /* White text color */
+  font-family: Arimo;
+  /* Use Arimo font */
+}
+
+.left,
+.right {
+  background-image: linear-gradient(90deg, #201cff -91.5%, #13ef95 120.05%);
+}
+
+.left {
+  align-self: flex-start;
+}
+
+.right {
+  align-self: flex-end;
+}
+
+
+.button-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  /* Adjust spacing between elements as needed */
+  perspective: 500px;
+  -moz-perspective: 500px;
+  -webkit-perspective: 500px;
+}
+
+.input-container {
+  display: flex;
+  align-items: center;
+  width: calc(100%);
+  /* Adjust width as needed */
+  margin-top: 20px;
+}
+
+.rounded-input {
+  flex: 1;
+  padding: 10px;
+  border: 2px solid #47aca9;
+  /* Border color to match the theme */
+  border-radius: 25px 0 0 25px;
+  background-color: #000;
+  /* Background color to match the theme */
+  color: white;
+  /* Text color */
+  box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.rounded-input::placeholder {
+  color: #ccc;
+  /* Placeholder color */
+}
+
+.rounded-input:focus {
+  border-color: #13ef95;
+  /* Focus border color to match the theme */
+}
+
+.send-button {
+  padding: 10px 15px;
+  border: 2px solid #47aca9;
+  /* Border color to match the theme */
+  border-left: 0;
+  /* No border on the left to connect with input */
+  border-radius: 0 25px 25px 0;
+  background-color: #47aca9;
+  /* Background color to match the theme */
+  color: white;
+  /* Text color */
+  cursor: pointer;
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+.send-button:hover {
+  background-color: #13ef95;
+  /* Hover background color */
+  border-color: #13ef95;
+  /* Hover border color */
+}
+
+.send-button i {
+  font-size: 16px;
+}
+
+/* UUID Management UI */
+.uuid-container {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: auto;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(5px);
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(71, 172, 169, 0.3);
+  transition: opacity 0.3s ease;
+}
+
+.uuid-container:hover {
+  background: rgba(0, 0, 0, 0.6);
+  border-color: rgba(71, 172, 169, 0.6);
+}
+
+.uuid-controls {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+#uuid-field {
+  width: 280px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #47aca9;
+  border-radius: 6px;
+  color: #fff;
+  padding: 8px 12px;
+  font-family: "Arimo", sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+#uuid-field:focus {
+  border-color: #13ef95;
+  box-shadow: 0 0 10px rgba(19, 239, 149, 0.2);
+}
+
+#generate-uuid-btn {
+  background: rgba(71, 172, 169, 0.2);
+  border: 1px solid #47aca9;
+  border-radius: 6px;
+  color: #fff;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-family: "Arimo", sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#generate-uuid-btn:hover {
+  background: #47aca9;
+  transform: translateY(-1px);
+}
+
+#generate-uuid-btn:active {
+  transform: translateY(0);
+}
+
+
+.uuid-help {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: "Inter", sans-serif;
+  margin-left: 4px;
+}
+
+#language-select,
+#role-select {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #47aca9;
+  border-radius: 6px;
+  color: #fff;
+  padding: 8px 12px;
+  font-family: "Arimo", sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  outline: none;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+#language-select:focus,
+#role-select:focus {
+  border-color: #13ef95;
+  box-shadow: 0 0 10px rgba(19, 239, 149, 0.2);
+}
+
+#language-select option {
+  background-color: #000;
+  color: #fff;
+}

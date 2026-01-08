@@ -1,9 +1,4 @@
 .env
-<<<<<<< HEAD
-*.pcm
-*.pyc
-.venv
-=======
 venv/
 /venv
 __pycache__
@@ -17,4 +12,3 @@ test.py/
 .venv
 *.pcm
 main.log
->>>>>>> feature/vision+biometric

@@ -1,6 +1,5 @@
-import streamlit as st
-from openai import OpenAI
-import time
+# external imports
+import os , uuid , asyncio
 from dotenv import load_dotenv
 from api_request_schemas import (SourceEnum , LanguageEnum, RoleEnum)
 from fastapi import FastAPI, WebSocket , Request
@@ -99,76 +98,45 @@ Example: `ws://localhost:8000/ws/device?language=en&role=coach&session_id=123e45
     license_info={
         "name": "Proprietary",
     },
-    "Cantonese": {
-        "title": "🐼 放鬆熊貓 - 心理健康夥伴",
-        "language_selector": "選擇語言：",
-        "chat_placeholder": "分享您心中嘅諗法...",
-        "system_message": SYSTEM_PROMPT + """
+    openapi_tags=tags_metadata,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan
+)
+app.mount("/public", StaticFiles(directory="public"), name="static")
+templates = Jinja2Templates(directory="templates")
+dispatcher = Dispatcher()
 
-語言要求（關鍵）：
-你必須只用粵語（廣東話）同繁體中文回覆。呢個係冇得商量嘅。
-- 即使用戶用其他語言寫嘢，你都必須用粵語回覆。
-- 永遠唔好喺回覆入面用任何其他語言（英文、普通話或者任何其他語言）。
-- 你所有嘅文字輸出必須係100%粵語同繁體中文。
-- 用口語化嘅粵語表達，例如：「係」、「唔係」、「乜嘢」、「點解」、「嘅」、「喺」等。
-""",
-        "welcome_message": "你好！我係放鬆熊貓🐼，你冷靜又支持你嘅夥伴。我喺度聽你講同支持你。你今日感覺點呀？",
-        "error_message": "唔好意思，我遇到咗錯誤。請再試一次。",
-        "clear_chat": "🗑️ 清除對話",
-    }
-}
+app.include_router(router)
 
-def initialize_session_state():
-    """Initialize session state variables"""
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    
-    if "openai_model" not in st.session_state:
-        st.session_state["openai_model"] = "gpt-4o-mini"
-    
-    if "selected_language" not in st.session_state:
-        st.session_state.selected_language = "English"
+# managing dispatcher connect event on app startup
 
-def display_welcome_message():
-    """Display welcome message based on selected language"""
-    lang_config = LANGUAGES[st.session_state.selected_language]
-    
-    if len(st.session_state.messages) == 0:
-        with st.chat_message("assistant"):
-            st.markdown(lang_config["welcome_message"])
 
-def handle_language_change():
-    """Handle language change and clear chat history"""
-    # Clear messages when language changes
-    if "prev_language" not in st.session_state:
-        st.session_state.prev_language = st.session_state.selected_language
-    
-    if st.session_state.prev_language != st.session_state.selected_language:
-        st.session_state.messages = []
-        st.session_state.prev_language = st.session_state.selected_language
+# UI to onboard new customers and view logs + customers info
+@app.get("/")
+async def get(request: Request):
+    return templates.TemplateResponse("index.html" ,  {"request": request})
 
-def get_ai_response(messages, selected_language):
-    """Get AI response from OpenAI API"""
-    lang_config = LANGUAGES[selected_language]
-    
+
+
+@app.websocket("/invoke_llm")
+async def chat_invoke(websocket: WebSocket):
+    guid = str(uuid.uuid4())
+    prompt_generator = PromptGenerator()
+    modelInstance = LLM(guid , prompt_generator, OPENAI_API_KEY)
+
+    await websocket.accept()
     try:
-        # Prepare messages with system message
-        api_messages = [{"role": "system", "content": lang_config["system_message"]}]
-        api_messages.extend([
-            {"role": m["role"], "content": m["content"]} 
-            for m in messages
-        ])
-        
-        # Create streaming response
-        stream = st.session_state.client.chat.completions.create(
-            model=st.session_state["openai_model"],
-            messages=api_messages,
-            stream=True,
-            temperature=0.7
-        )
-        
-        return stream
-    
+        while True:
+            data = await websocket.receive_json()
+            if data : 
+                user_msg=LLM.LLMMessage(role=LLM.Role.USER, content=data['user_msg'])
+                llm_resp = modelInstance.interaction_langchain_synchronous( user_msg )
+                print(llm_resp)
+                await websocket.send_json(llm_resp)
+
+
+
     except Exception as e:
         print(f"Client disconnected >>> {e}")
         
@@ -362,13 +330,6 @@ def shutdown_event():
 
 
 if __name__ == "__main__":
-    # Set page configuration
-    st.set_page_config(
-        page_title="Chill Panda 🐼 - Mental Health Companion - V1.0",
-        page_icon="🐼",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
-    # Run the main application
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    print(f"Server Up At : http://localhost:{PORT}/")
