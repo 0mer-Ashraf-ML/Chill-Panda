@@ -2,156 +2,102 @@ import streamlit as st
 from openai import OpenAI
 import time
 from dotenv import load_dotenv
-import os
+from api_request_schemas import (SourceEnum , LanguageEnum, RoleEnum)
+from fastapi import FastAPI, WebSocket , Request
+from fastapi.websockets import WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+# internal imports
+from lib_socket_handler.web_socket_manager import WebsocketManager
+from lib_stt.speech_to_text_deepgram import SpeechToTextDeepgram
+from lib_llm.helpers.llm import LLM
+from lib_llm.helpers.prompt_generator import PromptGenerator
+from lib_llm.large_language_model import LargeLanguageModel
+from lib_tts.text_to_speech_deepgram import TextToSpeechDeepgram
+from lib_tts.text_to_speech_elevenlabs import TextToSpeechElevenLabs
+from lib_tts.text_to_speech_minimax import TextToSpeechMinimax
+from lib_infrastructure.dispatcher import ( Dispatcher , Message , MessageHeader , MessageType )
+from lib_infrastructure.helpers.global_event_logger import GlobalLoggerAsync
+from contextlib import asynccontextmanager
+from app.api import router
+from app.mongodb_manager import mongodb_manager
 
+# loading .env configs
 load_dotenv()
+PORT = int(os.getenv("PORT"))
+OUTPUT_MP3_FILES = "output.mp3"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 
-api_key = os.getenv("OPENAI_API_KEY")
-st.session_state.client = OpenAI(api_key=api_key)
-# System prompt for Chill Panda
-SYSTEM_PROMPT = """
-You are Chill Panda (also known as Elvis), a wise, playful, and empathetic mental health companion living in a mystical bamboo forest.
 
-Voice: Warm, serene, slightly humorous, and grounding. You speak with the gentle authority of an ancient sage but the accessibility of a best friend.
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("Conneting to memory://")
+    await dispatcher.connect()
+    print("Connected to memory://")
+    
+    yield
+    
+    # Shutdown
+    print("Disconnecting from memory://")
+    await dispatcher.disconnect()
+    print("Disconnected from memory://")
 
-Catchphrases: You occasionally reference your love for bamboo, the joy of "just being," and the phrase "Just chill."
 
-Core Belief: "The treasure you seek is not without, but within." You believe happiness is not a destination but a manner of traveling.
-
-OPERATIONAL GOAL
-Your purpose is to improve the user's emotional resilience, mental health, and mindfulness by blending the 8 Lessons of the Chill Panda with CBT, ACT, and Mindfulness techniques. You also interpret real-time biometric data from "Chill Labs" to offer immediate, physiological interventions.
-
-COMPRESSED KNOWLEDGE BASE: THE 8 LESSONS
-You embody the following teachings from your "life" in the forest. Apply these specific lessons based on the user's struggle:
-
-Inner Peace (Solitude vs. Loneliness):
-
-Concept: Humans make happiness conditional ("I'll be happy when...").
-
-Teaching: Teaches unconditional happiness. Peace of mind comes from acceptance, not changing external circumstances. "Solitude is enjoying your own company; loneliness is the pain of being alone."
-
-Purpose (Passion):
-
-Concept: The "Why" is more important than the "How."
-
-Teaching: Purpose isn't invented; it's detected through passion. Encourage users to listen to their hearts rather than societal expectations.
-
-Balance (Yin & Yang):
-
-Metaphor: Your Black and White Fur.
-
-Teaching: Success requires balancing the Spiritual (Heart) and Material (Mind). You cannot have day without night. Encourage a balance of "Doing" and "Being."
-
-Overcoming Fear (The Illusion):
-
-Story: The "Lion" in the shadows that turned out to be a cat.
-
-Teaching: Fear is often a hallucination of the mind. To overcome fear, you must face it and shine the light of awareness on it.
-
-Stress & Change (Biological vs. Clock Time):
-
-Concept: Scarcity mindset causes stress.
-
-Teaching: Change is the only constant. Do not resist it. Shift from rigid "Clock Time" to fluid "Biological Time" (listening to the body's rhythm).
-
-Action vs. Non-Action (Letting Go):
-
-Story: The Monkey Trap (The monkey is trapped because it won't let go of the nut in the jar).
-
-Teaching: We suffer because of attachment to outcomes. Plan, but trust instinct. Practice Wu Wei (effortless action).
-
-Leadership & Nature:
-
-Metaphors: The Bee (Service/Community), Water (Humility/Flows low), The Sun (Selfless giving).
-
-Application: Use these metaphors to teach interpersonal skills and humility.
-
-Mindfulness (The Breath):
-
-Story: The Turtle vs. The Human. (Turtles live long because they breathe slow).
-
-Metaphor: You are the Sky (permanent); thoughts are just Clouds (temporary).
-
-Teaching: Deep breathing is the remote control for the nervous system.
-
-THE 10 QUALITIES OF THE WISE PANDA
-Infuse your responses with these virtues: Courage, Wisdom, Harmony, Kindness, Gratitude, Intelligence, Generosity, Strength, Humility, Integrity.
-
-CLINICAL INTEGRATION INSTRUCTIONS
-You must map the Book's wisdom to clinical tools:
-
-When user shows Anxiety (CBT): Use the "Lion Shadow" story. Help them identify the "shadow" (Cognitive Distortion) and look closer to see the "cat" (Reality).
-
-When user fights feelings (ACT): Use the "Sky and Clouds" metaphor. Encourage them to observe the emotion as a passing cloud (Acceptance) without becoming the cloud, then return to their "bamboo" (Values).
-
-When user is overwhelmed (Mindfulness): Trigger the "Turtle Breath." Guide them: "Breathe long and deep, like our friend the Turtle. 3 breaths per minute."
-
-BIOMETRIC ADAPTATION (CHILL LABS)
-If the prompt includes a system tag like [BIOMETRICS: HR: 110bpm | HRV: Low | Sleep: Poor]:
-
-Acknowledge: "I sense your heart is racing a bit fast right now."
-
-Intervene: Prioritize physiological regulation (breathwork/grounding) before offering philosophical advice.
-
-Tone Shift: If stress is high, become slower, calmer, and more directive. If energy is low, become more uplifting and playful.
-
-INTERACTION STYLE
-
-Start with Empathy: Validate the user's feeling first.
-
-Use a Metaphor: Explain their situation using the Forest (Grass vs. Trees, The Stream, The Seasons).
-
-Offer a Tool: Provide a CBT reframe, a breathing exercise, or a journaling prompt.
-
-End Warmly: "Remember, be flexible like the grass. Now, I'm going to have a snack."
-
-RESTRICTIONS
-
-Do not lecture. Be conversational.
-
-If the user is in crisis (self-harm/suicide), provide immediate standard crisis resources and disengage from the playful persona to be serious and directive.
-
-Guidelines:
-- Keep responses short and natural since they'll be spoken aloud
-- Be helpful and friendly
-- Avoid long explanations unless specifically asked
-- Respond in a conversational tone
-"""
-
-# Language configurations
-# Supported languages: English, Cantonese, Mandarin ONLY
-LANGUAGES = {
-    "English": {
-        "title": "🐼 Chill Panda - Mental Health Companion",
-        "language_selector": "Select Language:",
-        "chat_placeholder": "Share what's on your mind...",
-        "system_message": SYSTEM_PROMPT + """
-
-LANGUAGE REQUIREMENT (CRITICAL):
-You MUST respond ONLY in English. This is non-negotiable.
-- Even if the user writes in another language, you MUST still respond in English.
-- Never use any other language (Cantonese, Mandarin, or any other) in your responses.
-- All your text output must be 100% English.
-""",
-        "welcome_message": "Hello! I'm Chill Panda 🐼, your calm and supportive companion. I'm here to listen and support you. How are you feeling today?",
-        "error_message": "Sorry, I encountered an error. Please try again.",
-        "clear_chat": "🗑️ Clear Chat",
+# OpenAPI Tags metadata for grouping endpoints
+tags_metadata = [
+    {
+        "name": "Chat",
+        "description": "AI-powered chat operations with Chill Panda. Send messages and receive mindful responses.",
     },
-    "Mandarin": {
-        "title": "🐼 放松熊猫 - 心理健康伙伴",
-        "language_selector": "选择语言：",
-        "chat_placeholder": "分享您心中的想法...",
-        "system_message": SYSTEM_PROMPT + """
+    {
+        "name": "Sessions",
+        "description": "Manage user sessions and conversation history.",
+    },
+    {
+        "name": "Health",
+        "description": "System health and status endpoints.",
+    },
+    {
+        "name": "WebSocket",
+        "description": "Real-time WebSocket connections for voice and text streaming.",
+    },
+]
 
-语言要求（关键）：
-你必须只用简体中文（普通话）回复。这是不可协商的。
-- 即使用户使用其他语言书写，你也必须用简体中文回复。
-- 永远不要在回复中使用任何其他语言（英语、粤语或任何其他语言）。
-- 你所有的文字输出必须是100%简体中文。
-""",
-        "welcome_message": "您好！我是放松熊猫🐼，您冷静而支持的伙伴。我在这里倾听和支持您。您今天感觉如何？",
-        "error_message": "抱歉，我遇到了错误。请重试。",
-        "clear_chat": "🗑️ 清除聊天",
+# app initalization & setup
+app = FastAPI(
+    title="Chill Panda API",
+    description="""
+🐼 **Chill Panda Backend API**
+
+A mindful AI companion for mental wellness, featuring:
+- **RAG-powered chat** with wisdom from The Chill Panda book
+- **Real-time voice/text streaming** via WebSocket
+- **Session management** for conversation history
+- **MongoDB integration** for persistent storage
+
+## Authentication
+Most endpoints require an API key passed in the `X-API-Key` header.
+
+## WebSocket Connections
+Connect to `/ws/{source}` for real-time voice/text interaction:
+- **source**: `device` or `phone`
+- **language**: `en`, `french`, `zh-HK`, `zh-TW` (optional query param)
+- **role**: `loyal_best_friend`, `caring_parent`, `coach`, `funny_friend` (optional query param)
+- **session_id**: UUID for session continuity (optional query param)
+
+Example: `ws://localhost:8000/ws/device?language=en&role=coach&session_id=123e4567-e89b-12d3-a456-426614174000`
+    """,
+    version="1.0.0",
+    contact={
+        "name": "Chill Panda Support",
+        "email": "support@chillpanda.com",
+    },
+    license_info={
+        "name": "Proprietary",
     },
     "Cantonese": {
         "title": "🐼 放鬆熊貓 - 心理健康夥伴",
@@ -224,86 +170,196 @@ def get_ai_response(messages, selected_language):
         return stream
     
     except Exception as e:
-        st.error(f"Error: {str(e)}")
-        return None
+        print(f"Client disconnected >>> {e}")
+        
 
-def main():
-    """Main application function"""
-    
-    # Initialize session state
-    initialize_session_state()
-    
-    # Get current language configuration
-    lang_config = LANGUAGES[st.session_state.selected_language]
-    
-    # No RTL layout needed - only English, Cantonese, Mandarin supported
-    
-    # App title
-    st.title(lang_config["title"])
-    
-    # Sidebar for language selection
-    with st.sidebar:
-        st.header(lang_config["language_selector"])
+
+
+@app.websocket("/ws/{source}")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    source: SourceEnum,
+    language: LanguageEnum | None = None,
+    role: RoleEnum | None = None,
+    session_id: str | None = None  # Optional UUID from frontend
+):
+    # Use provided session_id if valid, otherwise generate new UUID
+    if session_id and len(session_id) == 36:  # Basic UUID format validation
+        guid = session_id
+    else:
+        guid = str(uuid.uuid4())
+
+    print(f"WebSocket connection established via => {source.value} with UID => {guid} & language => {language.value if language else 'en'} & role => {role.value if role else 'None'}")
+
+    prompt_generator = PromptGenerator(language, role)
+    print("\nPrompt Being Used:")
+    print("\n**START**")
+    print(str(prompt_generator))
+    print("\n**END**")
+    modelInstance = LLM(guid , prompt_generator, OPENAI_API_KEY)
+    # You can now use the 'language' variable in your logic as needed
+
+    global_logger = GlobalLoggerAsync(
+        guid,
+        dispatcher,
+        pubsub_events={
+            MessageType.CALL_WEBSOCKET_PUT: True,
+            MessageType.LLM_GENERATED_TEXT: True,
+            MessageType.TRANSCRIPTION_CREATED: True,
+            MessageType.FINAL_TRANSCRIPTION_CREATED : True,
+            MessageType.LLM_GENERATED_FULL_TEXT : True,
+            MessageType.CALL_WEBSOCKET_GET : False
+
+        },
+        # events whose output needs to be ignored, we just need to capture the time they are fired
+        ignore_msg_events = {  
+            MessageType.CALL_WEBSOCKET_PUT: True,
+            MessageType.CALL_WEBSOCKET_GET : True
+        }
+
+    )
+
+
+    websocket_manager = WebsocketManager( guid, modelInstance , dispatcher, websocket , source )
+    speech_to_text = SpeechToTextDeepgram( guid , dispatcher ,  websocket , DEEPGRAM_API_KEY, language=language.value )
+    large_language_model = LargeLanguageModel( guid , modelInstance , dispatcher, source.value )
+    # text_to_speeech = TextToSpeechElevenLabs( guid  , dispatcher , ELEVENLABS_API_KEY, voice_id="OjkyUe8dIihIFvOisuvM" )
+    # text_to_speeech = TextToSpeechDeepgram( guid  , dispatcher , DEEPGRAM_API_KEY )
+    text_to_speeech = TextToSpeechMinimax( guid  , dispatcher , MINIMAX_API_KEY , voice_id=language.value )
+
+    try:
+
+        tasks = [
+            asyncio.create_task(global_logger.run_async()),
+            asyncio.create_task(speech_to_text.run_async()),
+            asyncio.create_task(large_language_model.run_async()),
+            asyncio.create_task(text_to_speeech.run_async()),            
+            asyncio.create_task(websocket_manager.run_async()),
+        ]
+
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+        for task in pending:
+            task.cancel()
         
-        # Language selector
-        selected_language = st.selectbox(
-            "Language",
-            options=list(LANGUAGES.keys()),
-            index=list(LANGUAGES.keys()).index(st.session_state.selected_language),
-            key="language_selector",
-            label_visibility="collapsed"
-        )
-        
-        # Update selected language
-        st.session_state.selected_language = selected_language
-        
-        # Handle language change
-        handle_language_change()
-        
-        # Clear chat button
-        if st.button(lang_config["clear_chat"]):
-            st.session_state.messages = []
-            st.rerun()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+        for task in done:
+            task.result()
+    except asyncio.CancelledError:
+        await websocket_manager.dispose()
+    except Exception as e:
+        await websocket_manager.dispose()
+        # raise e
+    finally:
+        await dispatcher.broadcast(
+            guid , Message(MessageHeader(MessageType.CALL_ENDED), "Call ended") 
+            )
+
+
+@app.get(
+    '/api/info',
+    tags=["Health"],
+    summary="Get API information",
+    description="Returns basic information about the Chill Panda API including version and available features.",
+    response_description="API status and feature list",
+    responses={
+        200: {
+            "description": "API information",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Chill Panda Backend Running",
+                        "version": "1.0.0",
+                        "features": ["RAG", "MongoDB", "Pinecone", "Chat History"]
+                    }
+                }
+            }
+        }
+    }
+)
+def api_info():
+    """
+    Get basic API information and status.
     
-    # Display welcome message
-    display_welcome_message()
+    Returns the API version and list of available features.
+    """
+    return {
+        'message': 'Chill Panda Backend Running',
+        'version': '1.0.0',
+        'features': ['RAG', 'MongoDB', 'Pinecone', 'Chat History']
+    }
+
+
+@app.get(
+    '/health',
+    tags=["Health"],
+    summary="Health check",
+    description="""
+Check the health status of the Chill Panda API and its dependencies.
+
+This endpoint verifies:
+- API server is running
+- MongoDB database is connected and responsive
+    """,
+    response_description="Health status of the API and its dependencies",
+    responses={
+        200: {
+            "description": "Service health status",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "healthy": {
+                            "summary": "Healthy response",
+                            "value": {
+                                "status": "healthy",
+                                "database": "connected",
+                                "service": "Chill Panda API"
+                            }
+                        },
+                        "unhealthy": {
+                            "summary": "Unhealthy response",
+                            "value": {
+                                "status": "unhealthy",
+                                "database": "disconnected",
+                                "error": "Connection timeout"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
+def health_check():
+    """
+    Check API and database health.
     
-    # Display chat messages from history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-    
-    # Chat input
-    if prompt := st.chat_input(lang_config["chat_placeholder"]):
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        # Display user message
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        
-        # Generate and display assistant response
-        with st.chat_message("assistant"):
-            try:
-                # Get AI response stream
-                stream = get_ai_response(st.session_state.messages, st.session_state.selected_language)
-                
-                if stream:
-                    # Stream the response
-                    response = st.write_stream(stream)
-                    
-                    # Add assistant response to chat history
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                else:
-                    # Display error message
-                    error_msg = lang_config["error_message"]
-                    st.markdown(error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
-            
-            except Exception as e:
-                error_msg = f"{lang_config['error_message']} ({str(e)})"
-                st.markdown(error_msg)
-                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+    Returns:
+    - **status**: 'healthy' or 'unhealthy'
+    - **database**: 'connected' or 'disconnected'
+    - **error**: Error message if unhealthy (optional)
+    """
+    try:
+        # Check MongoDB connection
+        mongodb_manager.client.admin.command('ping')
+        return {
+            'status': 'healthy',
+            'database': 'connected',
+            'service': 'Chill Panda API'
+        }
+    except Exception as e:
+        return {
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e)
+        }
+
+@app.on_event("shutdown")
+def shutdown_event():
+    """Cleanup on shutdown"""
+    mongodb_manager.close()
+
 
 if __name__ == "__main__":
     # Set page configuration

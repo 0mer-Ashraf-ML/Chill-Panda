@@ -1,4 +1,20 @@
 .env
+<<<<<<< HEAD
 *.pcm
 *.pyc
 .venv
+=======
+venv/
+/venv
+__pycache__
+orders/
+/orders
+/orders/
+conversations.json
+test.py/
+/test.py
+/test.py/
+.venv
+*.pcm
+main.log
+>>>>>>> feature/vision+biometric
