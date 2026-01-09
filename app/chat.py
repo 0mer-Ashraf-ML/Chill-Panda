@@ -172,7 +172,7 @@ class RAGChat:
         
         try:
             response = client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                model=os.getenv("OPENAI_MODEL", "gpt-4o-nano"),
                 messages=messages,
                 temperature=0.7,
                 max_tokens=300,
@@ -210,7 +210,7 @@ class RAGChat:
         
         try:
             stream = client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                model=os.getenv("OPENAI_MODEL", "gpt-4o-nano"),
                 messages=messages,
                 temperature=0.7,
                 max_tokens=300,
