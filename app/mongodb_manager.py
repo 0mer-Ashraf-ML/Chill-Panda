@@ -109,7 +109,7 @@ class MongoDBManager:
         try:
             sessions = list(self.sessions_collection.find(
                 {"user_id": user_id},
-                {"_id": 0, "session_id": 1, "created_at": 1, "last_activity": 1, "message_count": 1}
+                {"_id": 0, "session_id": 1, "user_id": 1, "created_at": 1, "last_activity": 1, "message_count": 1}
             ).sort("last_activity", -1).limit(limit))
             
             return sessions

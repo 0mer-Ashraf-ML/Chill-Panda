@@ -8,7 +8,7 @@ def initialize_pinecone():
     """Initialize Pinecone index for document storage"""
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     
-    index_name = os.getenv("PINECONE_INDEX_NAME", "chill-panda-index")
+    index_name = os.getenv("PINECONE_INDEX_NAME", "chill-panda")
     
     # Check if index exists
     if index_name not in pc.list_indexes().names():
@@ -28,5 +28,5 @@ def initialize_pinecone():
 def get_pinecone_index():
     """Get Pinecone index instance"""
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-    index_name = os.getenv("PINECONE_INDEX_NAME", "chill-panda-index")
+    index_name = os.getenv("PINECONE_INDEX_NAME", "chill-panda")
     return pc.Index(index_name)

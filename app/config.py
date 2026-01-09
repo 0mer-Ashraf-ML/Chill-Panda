@@ -15,7 +15,7 @@ MONGODB_DATABASE = os.getenv('MONGODB_DATABASE', 'chillpanda_db')
 # Pinecone Configuration
 PINECONE_API_KEY = os.getenv('PINECONE_API_KEY')
 PINECONE_ENVIRONMENT = os.getenv('PINECONE_ENVIRONMENT')
-PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME', 'chill-panda-index')
+PINECONE_INDEX_NAME = os.getenv('PINECONE_INDEX_NAME', 'chill-panda')
 
 # App Configuration
 ENV = os.getenv('ENV', 'development')

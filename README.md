@@ -195,7 +195,7 @@ Create a `.env` file in the project root with the following variables:
 | `MONGODB_DATABASE` | `chillpanda_db` | MongoDB database name |
 | `MONGODB_CHATS_COLLECTION` | `chat_history` | Collection for chat history |
 | `MONGODB_SESSIONS_COLLECTION` | `user_sessions` | Collection for sessions |
-| `PINECONE_INDEX_NAME` | `chill-panda-index` | Pinecone index name |
+| `PINECONE_INDEX_NAME` | `chill-panda` | Pinecone index name |
 | `PINECONE_ENVIRONMENT` | - | Pinecone environment |
 | `EMBEDDING_MODEL` | `text-embedding-ada-002` | OpenAI embedding model |
 | `OPENAI_MODEL` | `gpt-4o-mini` | OpenAI chat model |
