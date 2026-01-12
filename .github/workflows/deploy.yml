@@ -109,3 +109,11 @@ jobs:
         
         echo "❌ Server health check failed after $MAX_ATTEMPTS attempts"
         exit 1
+
+    - name: Run API integration tests
+      run: |
+        echo "Running API integration tests..."
+        pip install requests -q
+        python tests/test_api_integration.py \
+          --base-url http://${{ secrets.SERVER_HOST }}:8000 \
+          --strict
