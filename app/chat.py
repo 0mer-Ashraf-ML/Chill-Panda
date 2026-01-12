@@ -144,7 +144,8 @@ class RAGChat:
             else:
                 return ""
         except Exception as e:
-            return ""
+            # Re-raise the exception to be handled by the caller
+            raise e
     
     def generate_response(self, user_message: str, conversation_history: List[Dict] = None) -> str:
         """Generate response using RAG when relevant, otherwise use general knowledge"""
@@ -181,8 +182,8 @@ class RAGChat:
             return response.choices[0].message.content.strip()
         
         except Exception as e:
-            # Fallback response
-            return "I apologize, but I'm having trouble accessing my wisdom right now. Please try again, and remember to breathe deeply and stay calm. 🐼"
+            # Re-raise the exception to be handled by the caller
+            raise e
     
     def generate_streaming_response(self, user_message: str, conversation_history: List[Dict] = None):
         """Generate streaming response using OpenAI's stream capability"""
@@ -222,7 +223,8 @@ class RAGChat:
                     yield chunk.choices[0].delta.content
         
         except Exception as e:
-            yield "I apologize, but I'm having trouble accessing my wisdom right now. Please try again, and remember to breathe deeply and stay calm. 🐼"
+            # Re-raise the exception to be handled by the caller
+            raise e
 
 # Initialize RAG chat instance
 rag_chat = RAGChat()
