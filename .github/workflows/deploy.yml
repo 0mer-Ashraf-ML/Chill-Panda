@@ -66,3 +66,46 @@ jobs:
           echo "Starting application..."
           nohup python3 main.py > main.log 2>&1 &
         EOF
+
+    - name: Wait for server startup
+      run: |
+        echo "Waiting 60 seconds for server to start..."
+        sleep 60
+
+    - name: Verify server health
+      run: |
+        echo "Checking server health..."
+        MAX_ATTEMPTS=6
+        ATTEMPT=1
+        
+        while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+          echo "Attempt $ATTEMPT of $MAX_ATTEMPTS..."
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" http://${{ secrets.SERVER_HOST }}:8000/health || echo "000")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          
+          echo "HTTP Code: $HTTP_CODE"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_CODE" = "200" ]; then
+            if echo "$BODY" | grep -q '"status":\s*"healthy"'; then
+              echo "✅ Server is healthy!"
+              exit 0
+            else
+              echo "⚠️ Server responded but status is not healthy"
+            fi
+          else
+            echo "⚠️ Server not responding (HTTP $HTTP_CODE)"
+          fi
+          
+          if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+            echo "Waiting 10 seconds before retry..."
+            sleep 10
+          fi
+          
+          ATTEMPT=$((ATTEMPT + 1))
+        done
+        
+        echo "❌ Server health check failed after $MAX_ATTEMPTS attempts"
+        exit 1
