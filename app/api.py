@@ -54,45 +54,65 @@ async def chat(req: ChatRequest):
 
 @router.post("/chat", tags=["Chat"])
 async def chat_stream(req: ChatRequest):
-    async def event_generator():
-        history = mongodb_manager.get_conversation_history(req.session_id, limit=10)
 
-        # Save user message
+    async def event_generator():
+        history = mongodb_manager.get_conversation_history(
+            req.session_id,
+            limit=10
+        )
+
         mongodb_manager.save_message(
             session_id=req.session_id,
             user_id=req.user_id,
             role="user",
             content=req.input_text,
-            metadata={"language": req.language}
+            metadata={
+                "language": req.language,
+                "user_role": req.role
+            }
         )
 
         full_reply = ""
-        # The generator from chat.py is synchronous, so we might want to wrap it or just use it
-        # Since it's yields from OpenAI which is synchronous in this client
-        # For better async performance, we could use asnyc client, but we'll stick to current pattern
-        
+
         for chunk in generate_streaming_ai_reply(
             user_message=req.input_text,
-            language=req.language,
+            role=req.role,
             conversation_history=history
         ):
             full_reply += chunk
-            yield f"data: {json.dumps({'reply': chunk,'session_id': req.session_id,'is_end': False})}\n\n"
-            await asyncio.sleep(0) # Yield control
 
-        # Save assistant message once complete
+            data = {
+                "reply": chunk,
+                "session_id": req.session_id,
+                "is_end": False
+            }
+
+            yield f"data: {json.dumps(data)}\n\n"
+            await asyncio.sleep(0)
+
         ai_msg_id = mongodb_manager.save_message(
             session_id=req.session_id,
             user_id=req.user_id,
             role="assistant",
             content=full_reply,
-            metadata={"language": req.language}
+            metadata={
+                "language": req.language,
+                "user_role": req.role
+            }
         )
-        
-        # Send final metadata
-        yield f"data: {json.dumps({'message_id': ai_msg_id, 'session_id': req.session_id, 'is_end': True})}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+        end_data = {
+            "message_id": ai_msg_id,
+            "session_id": req.session_id,
+            "is_end": True
+        }
+
+        yield f"data: {json.dumps(end_data)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream"
+    )
 
 
 @router.get("/conversation/{session_id}", response_model=ConversationHistory, tags=["Sessions"])

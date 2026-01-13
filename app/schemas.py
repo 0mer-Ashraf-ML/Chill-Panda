@@ -1,29 +1,43 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Literal
 from datetime import datetime
 
 
 class ChatRequest(BaseModel):
     """Request model for sending a chat message to Chill Panda."""
+
     session_id: str = Field(
         ...,
         description="Unique session identifier (UUID format)",
         examples=["123e4567-e89b-12d3-a456-426614174000"]
     )
+
     user_id: str = Field(
         ...,
         description="Unique user identifier",
         examples=["user_abc123"]
     )
+
     input_text: str = Field(
         ...,
         description="The message text from the user",
         examples=["I'm feeling anxious today. Can you help me calm down?"]
     )
+
     language: str = Field(
         default="en",
         description="Language code for the response (en, french, zh-HK, zh-TW)",
         examples=["en"]
+    )
+
+    role: Literal[
+        "best_friend",
+        "caring_parent",
+        "coach"
+    ] = Field(
+        default="best_friend",
+        description="Emotional role used by Chill Panda to respond",
+        examples=["best_friend"]
     )
 
     model_config = {
@@ -33,11 +47,13 @@ class ChatRequest(BaseModel):
                     "session_id": "123e4567-e89b-12d3-a456-426614174000",
                     "user_id": "user_abc123",
                     "input_text": "I'm feeling anxious today. Can you help me calm down?",
-                    "language": "en"
+                    "language": "en",
+                    "role": "best_friend"
                 }
             ]
         }
     }
+
 
 
 class ChatResponse(BaseModel):
