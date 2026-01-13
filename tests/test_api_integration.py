@@ -59,7 +59,7 @@ def test_api_info_endpoint(base_url: str) -> Tuple[bool, str]:
 
 
 def test_chat_endpoint(base_url: str) -> Tuple[bool, str]:
-    """Test the /api/v1/chat endpoint"""
+    """Test the /api/v1/chat/simple endpoint"""
     try:
         payload = {
             "input_text": "Hello, how are you?",
@@ -68,7 +68,7 @@ def test_chat_endpoint(base_url: str) -> Tuple[bool, str]:
             "language": "en"
         }
         response = requests.post(
-            f"{base_url}/api/v1/chat",
+            f"{base_url}/api/v1/chat/simple",
             json=payload,
             timeout=30
         )
@@ -84,7 +84,7 @@ def test_chat_endpoint(base_url: str) -> Tuple[bool, str]:
 
 
 def test_chat_stream_endpoint(base_url: str) -> Tuple[bool, str]:
-    """Test the /api/v1/chat/stream endpoint"""
+    """Test the /api/v1/chat endpoint"""
     try:
         payload = {
             "input_text": "Tell me a short joke",
@@ -93,7 +93,7 @@ def test_chat_stream_endpoint(base_url: str) -> Tuple[bool, str]:
             "language": "en"
         }
         response = requests.post(
-            f"{base_url}/api/v1/chat/stream",
+            f"{base_url}/api/v1/chat",
             json=payload,
             timeout=30,
             stream=True
