@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/v1")
 # EXISTING CHATBOT APIS (UNCHANGED)
 # ==============================
 
-@router.post("/chat", response_model=ChatResponse, tags=["Chat"])
+@router.post("/chat/simple", response_model=ChatResponse, tags=["Chat"])
 async def chat(req: ChatRequest):
     history = mongodb_manager.get_conversation_history(req.session_id, limit=10)
 
@@ -52,7 +52,7 @@ async def chat(req: ChatRequest):
     )
 
 
-@router.post("/chat/stream", tags=["Chat"])
+@router.post("/chat", tags=["Chat"])
 async def chat_stream(req: ChatRequest):
     async def event_generator():
         history = mongodb_manager.get_conversation_history(req.session_id, limit=10)
