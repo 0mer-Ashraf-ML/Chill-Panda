@@ -23,6 +23,7 @@ class WebsocketManager(Disposable):
         ws: WebSocket,
         source : SourceEnum,
         logger=None,
+        voice_tracker=None,  # VoiceUsageTracker instance for limit notifications
     ):
         self.guid = guid
         self.modelInstance = modelInstance
@@ -30,6 +31,7 @@ class WebsocketManager(Disposable):
         self.ws = ws
         self.source = source
         self.logger = logger
+        self.voice_tracker = voice_tracker
 
     async def open(self):
         await self.ws.accept()
@@ -226,6 +228,60 @@ class WebsocketManager(Disposable):
                 crisis_data = { "is_critical": is_critical }
                 await self.send( crisis_data )
 
+    async def websocket_put_voice_limit_reached(self):
+        """Handle voice limit reached notifications"""
+        async with await self.dispatcher.subscribe(
+            self.guid, MessageType.VOICE_LIMIT_REACHED
+        ) as subscriber:
+            async for event in subscriber:
+                limit_data = event.message.data
+                voice_limit_msg = {
+                    "type": "voice_limit_reached",
+                    "limit_type": limit_data.get("limit_type"),
+                    "limit_minutes": limit_data.get("limit_minutes"),
+                    "used_minutes": limit_data.get("used_minutes"),
+                    "message": limit_data.get("message"),
+                    "voice_disabled": True,
+                    "is_text": False,
+                    "is_clear_event": False
+                }
+                await self.send( voice_limit_msg )
+
+    async def websocket_put_voice_disabled(self):
+        """Handle voice disabled notifications"""
+        async with await self.dispatcher.subscribe(
+            self.guid, MessageType.VOICE_DISABLED
+        ) as subscriber:
+            async for event in subscriber:
+                disabled_data = event.message.data
+                voice_disabled_msg = {
+                    "type": "voice_disabled",
+                    "reason": disabled_data.get("reason"),
+                    "voice_disabled": True,
+                    "is_text": False,
+                    "is_clear_event": False
+                }
+                await self.send( voice_disabled_msg )
+
+    async def websocket_put_voice_warning(self):
+        """Handle voice usage warning notifications"""
+        async with await self.dispatcher.subscribe(
+            self.guid, MessageType.VOICE_USAGE_WARNING
+        ) as subscriber:
+            async for event in subscriber:
+                warning_data = event.message.data
+                voice_warning_msg = {
+                    "type": "voice_usage_warning",
+                    "limit_type": warning_data.get("limit_type"),
+                    "limit_minutes": warning_data.get("limit_minutes"),
+                    "used_minutes": warning_data.get("used_minutes"),
+                    "remaining_minutes": warning_data.get("remaining_minutes"),
+                    "message": warning_data.get("message"),
+                    "is_text": False,
+                    "is_clear_event": False
+                }
+                await self.send( voice_warning_msg )
+
 
 
     async def run_async(self):
@@ -244,7 +300,7 @@ class WebsocketManager(Disposable):
             asyncio.create_task(self.websocket_put_llm_responce()),
             # check for sending events for LLM structured data being captured
             asyncio.create_task(self.websocket_put_llm_structured_data()),
-            # check for sending dormant event in LLM 
+            # check for sending dormant event in LLM
             asyncio.create_task(self.websocket_put_dormant_event()),
             # check for sending crisis event
             asyncio.create_task(self.websocket_put_crisis_event()),
@@ -254,6 +310,10 @@ class WebsocketManager(Disposable):
             asyncio.create_task(self.close_connection()),
             # check for socket connection state
             asyncio.create_task(self.check_connection()),
+            # Voice usage limit notifications
+            asyncio.create_task(self.websocket_put_voice_limit_reached()),
+            asyncio.create_task(self.websocket_put_voice_disabled()),
+            asyncio.create_task(self.websocket_put_voice_warning()),
         ]
         await asyncio.gather(*tasks)
 

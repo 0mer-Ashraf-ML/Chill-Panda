@@ -11,7 +11,13 @@ import asyncio
 from .vision_service import analyze_image_with_gpt4_vision
 from .biometric_service import detect_stress
 from datetime import datetime
-from typing import List
+from typing import List, Optional
+from .config import (
+    VOICE_USAGE_ENABLED,
+    VOICE_LIMIT_SESSION_MINUTES,
+    VOICE_LIMIT_DAILY_MINUTES,
+    VOICE_LIMIT_MONTHLY_MINUTES
+)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -183,3 +189,135 @@ async def ingest_biometrics(
         "recommendations": recommendations,
         "source": "biometric"
     }
+
+
+# ==============================
+# VOICE USAGE APIs
+# ==============================
+
+@router.get("/voice-usage/{user_id}", tags=["Voice Usage"])
+async def get_voice_usage(user_id: str):
+    """
+    Get current voice usage statistics for a user.
+
+    Returns usage for current session (if any), today, and current month,
+    along with remaining quota and limits.
+    """
+    if not VOICE_USAGE_ENABLED:
+        return {
+            "enabled": False,
+            "message": "Voice usage tracking is disabled"
+        }
+
+    try:
+        # Get daily usage
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        daily_doc = mongodb_manager.db["voice_usage_daily"].find_one({
+            "user_id": user_id,
+            "date": today
+        })
+
+        # Get monthly usage
+        year_month = datetime.utcnow().strftime("%Y-%m")
+        monthly_doc = mongodb_manager.db["voice_usage_monthly"].find_one({
+            "user_id": user_id,
+            "year_month": year_month
+        })
+
+        # Calculate limits in milliseconds
+        session_limit_ms = VOICE_LIMIT_SESSION_MINUTES * 60 * 1000
+        daily_limit_ms = VOICE_LIMIT_DAILY_MINUTES * 60 * 1000
+        monthly_limit_ms = VOICE_LIMIT_MONTHLY_MINUTES * 60 * 1000
+
+        # Get usage values
+        daily_used_ms = daily_doc.get("duration_ms", 0) if daily_doc else 0
+        monthly_used_ms = monthly_doc.get("duration_ms", 0) if monthly_doc else 0
+
+        # Calculate remaining
+        daily_remaining_ms = max(0, daily_limit_ms - daily_used_ms)
+        monthly_remaining_ms = max(0, monthly_limit_ms - monthly_used_ms)
+
+        return {
+            "enabled": True,
+            "user_id": user_id,
+            "limits": {
+                "session_minutes": VOICE_LIMIT_SESSION_MINUTES,
+                "daily_minutes": VOICE_LIMIT_DAILY_MINUTES,
+                "monthly_minutes": VOICE_LIMIT_MONTHLY_MINUTES
+            },
+            "daily": {
+                "date": today,
+                "used_ms": daily_used_ms,
+                "used_minutes": round(daily_used_ms / 60000, 2),
+                "remaining_ms": daily_remaining_ms,
+                "remaining_minutes": round(daily_remaining_ms / 60000, 2),
+                "limit_reached": daily_used_ms >= daily_limit_ms
+            },
+            "monthly": {
+                "year_month": year_month,
+                "used_ms": monthly_used_ms,
+                "used_minutes": round(monthly_used_ms / 60000, 2),
+                "remaining_ms": monthly_remaining_ms,
+                "remaining_minutes": round(monthly_remaining_ms / 60000, 2),
+                "limit_reached": monthly_used_ms >= monthly_limit_ms
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching voice usage: {str(e)}")
+
+
+@router.get("/voice-usage/{user_id}/history", tags=["Voice Usage"])
+async def get_voice_usage_history(
+    user_id: str,
+    days: int = Query(default=7, ge=1, le=30, description="Number of days of history to return")
+):
+    """
+    Get voice usage history for a user.
+
+    Returns daily usage for the specified number of past days.
+    """
+    if not VOICE_USAGE_ENABLED:
+        return {
+            "enabled": False,
+            "message": "Voice usage tracking is disabled"
+        }
+
+    try:
+        from datetime import timedelta
+
+        # Get usage for past N days
+        history = []
+        for i in range(days):
+            date = (datetime.utcnow() - timedelta(days=i)).strftime("%Y-%m-%d")
+            daily_doc = mongodb_manager.db["voice_usage_daily"].find_one({
+                "user_id": user_id,
+                "date": date
+            })
+
+            if daily_doc:
+                history.append({
+                    "date": date,
+                    "duration_ms": daily_doc.get("duration_ms", 0),
+                    "duration_minutes": round(daily_doc.get("duration_ms", 0) / 60000, 2),
+                    "session_count": daily_doc.get("session_count", 0),
+                    "limit_reached_count": daily_doc.get("limit_reached_count", 0)
+                })
+            else:
+                history.append({
+                    "date": date,
+                    "duration_ms": 0,
+                    "duration_minutes": 0,
+                    "session_count": 0,
+                    "limit_reached_count": 0
+                })
+
+        return {
+            "enabled": True,
+            "user_id": user_id,
+            "days": days,
+            "history": history
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching voice usage history: {str(e)}")

@@ -18,12 +18,14 @@ class TextToSpeechDeepgram:
     - Proper interruption handling (listens to user speech, not clear events)
     - Better state management
     - Smart buffering for better audio quality
+    - Voice usage tracking integration
     """
-    
-    def __init__(self, guid, dispatcher: Dispatcher, api_key) -> None:
+
+    def __init__(self, guid, dispatcher: Dispatcher, api_key, voice_tracker=None) -> None:
         self.guid = guid
         self.dispatcher = dispatcher
         self.api_key = api_key
+        self.voice_tracker = voice_tracker  # Voice usage tracker
         
         # Deepgram client
         from deepgram import DeepgramClientOptions
@@ -114,30 +116,50 @@ class TextToSpeechDeepgram:
                 if isinstance(arg, bytes):
                     data = arg
                     break
-        
+
         if data is None and 'data' in kwargs:
             data = kwargs['data']
-            
+
         if data is None:
             # Try to find data in args
             for arg in args:
                 if hasattr(arg, 'data'):
                     data = arg.data
                     break
-        
+
         if data is None:
             print("⚠️ No audio data found in callback")
             return
-            
+
         # Check if interrupted
         if self.is_interrupted:
             print("🚫 Skipping audio - user interrupted")
             return
-        
+
+        # Check if voice is disabled (limit reached)
+        if self.voice_tracker and not self.voice_tracker.is_voice_enabled():
+            print("🚫 Voice disabled - skipping audio")
+            self.is_interrupted = True
+            return
+
         # Encode and broadcast
         base64_audio = base64.b64encode(data).decode("utf-8")
+
+        # Track audio usage (async, in background)
+        if self.voice_tracker:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    future = asyncio.create_task(
+                        self.voice_tracker.track_audio_chunk(base64_audio)
+                    )
+                    # Note: We can't await here since this is a sync callback
+                    # The tracking will happen asynchronously
+            except Exception as e:
+                print(f"⚠️ Error tracking audio: {e}")
+
         data_object = {"is_text": False, "audio": base64_audio}
-        
+
         # Use asyncio to broadcast (callback is sync)
         try:
             loop = asyncio.get_event_loop()
@@ -190,11 +212,16 @@ class TextToSpeechDeepgram:
         """Send text to Deepgram for TTS"""
         if not text.strip():
             return
-            
+
         if self.is_interrupted:
             print(f"🚫 Skipping send - interrupted")
             return
-            
+
+        # Check if voice is still enabled (not at limit)
+        if self.voice_tracker and not self.voice_tracker.is_voice_enabled():
+            print(f"🚫 Voice disabled - skipping TTS")
+            return
+
         if not await self.ensure_connection():
             print("❌ Cannot send - connection failed")
             return

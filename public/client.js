@@ -32,6 +32,54 @@ function setStoredUUID(uuid) {
   if (uuidField) uuidField.value = uuid;
 }
 
+// User ID Management (for voice usage tracking)
+function getStoredUserID() {
+  return localStorage.getItem('voice_engine_user_id');
+}
+
+function setStoredUserID(userId) {
+  localStorage.setItem('voice_engine_user_id', userId);
+  const userIdField = document.getElementById('user-id-field');
+  if (userIdField) userIdField.value = userId;
+}
+
+function initUserID() {
+  const userIdField = document.getElementById('user-id-field');
+  const generateUserIdBtn = document.getElementById('generate-user-id-btn');
+
+  // Load existing User ID or generate new one
+  let currentUserID = getStoredUserID();
+  if (!currentUserID) {
+    currentUserID = generateUUID();
+    setStoredUserID(currentUserID);
+  }
+
+  if (userIdField) {
+    userIdField.value = currentUserID;
+
+    // Allow manual editing
+    userIdField.removeAttribute('readonly');
+    userIdField.addEventListener('change', (e) => {
+      const val = e.target.value.trim();
+      if (val && val.length > 0) {
+        setStoredUserID(val);
+      }
+    });
+  }
+
+  if (generateUserIdBtn) {
+    generateUserIdBtn.addEventListener('click', () => {
+      if (confirm("Generate new User ID? This will reset your voice usage tracking.")) {
+        const newUserID = generateUUID();
+        setStoredUserID(newUserID);
+        window.location.reload();
+      }
+    });
+  }
+
+  return currentUserID;
+}
+
 function initUUID() {
   const uuidField = document.getElementById('uuid-field');
   const generateBtn = document.getElementById('generate-uuid-btn');
@@ -53,7 +101,7 @@ function initUUID() {
       if (val && val.length === 36) { // Basic validation
         setStoredUUID(val);
         // Optional: Reload page to apply new UUID immediately
-        // window.location.reload(); 
+        // window.location.reload();
       }
     });
   }

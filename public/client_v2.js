@@ -14,6 +14,10 @@ let audioContext = new (window.AudioContext || window.webkitAudioContext)();
 // Track currently playing audio source for interruption
 let currentAudioSource = null;
 
+// Voice usage tracking state
+let voiceEnabled = true;
+let voiceLimitReached = null;
+
 // UUID Management
 function generateUUID() {
   if (crypto.randomUUID) {
@@ -25,6 +29,7 @@ function generateUUID() {
   });
 }
 
+// Session ID (UUID) Management
 function getStoredUUID() {
   return localStorage.getItem('voice_engine_uuid');
 }
@@ -67,6 +72,91 @@ function initUUID() {
   }
 
   return currentUUID;
+}
+
+// User ID Management (for voice usage tracking)
+function getStoredUserID() {
+  return localStorage.getItem('voice_engine_user_id');
+}
+
+function setStoredUserID(userId) {
+  localStorage.setItem('voice_engine_user_id', userId);
+  const userIdField = document.getElementById('user-id-field');
+  if (userIdField) userIdField.value = userId;
+}
+
+function initUserID() {
+  const userIdField = document.getElementById('user-id-field');
+  const generateUserIdBtn = document.getElementById('generate-user-id-btn');
+
+  // Load existing User ID or generate new one
+  let currentUserID = getStoredUserID();
+  if (!currentUserID) {
+    currentUserID = generateUUID();
+    setStoredUserID(currentUserID);
+  }
+
+  if (userIdField) {
+    userIdField.value = currentUserID;
+    userIdField.removeAttribute('readonly');
+    userIdField.addEventListener('change', (e) => {
+      const val = e.target.value.trim();
+      if (val && val.length > 0) {
+        setStoredUserID(val);
+      }
+    });
+  }
+
+  if (generateUserIdBtn) {
+    generateUserIdBtn.addEventListener('click', () => {
+      if (confirm("Generate new User ID? This will reset your voice usage tracking.")) {
+        const newUserID = generateUUID();
+        setStoredUserID(newUserID);
+        window.location.reload();
+      }
+    });
+  }
+
+  return currentUserID;
+}
+
+// Handle voice limit notifications
+function handleVoiceLimitReached(data) {
+  voiceEnabled = false;
+  voiceLimitReached = data.limit_type;
+
+  console.log(`[VOICE_LIMIT] ${data.limit_type} limit reached: ${data.message}`);
+
+  // Show notification to user
+  const notification = document.getElementById('voice-limit-notification');
+  if (notification) {
+    notification.textContent = data.message;
+    notification.style.display = 'block';
+  } else {
+    alert(data.message);
+  }
+
+  // Update UI to show voice is disabled
+  const voiceStatusEl = document.getElementById('voice-status');
+  if (voiceStatusEl) {
+    voiceStatusEl.textContent = 'Voice Disabled';
+    voiceStatusEl.classList.add('disabled');
+  }
+}
+
+function handleVoiceWarning(data) {
+  console.log(`[VOICE_WARNING] ${data.limit_type}: ${data.remaining_minutes.toFixed(1)} minutes remaining`);
+
+  // Show warning to user
+  const warningEl = document.getElementById('voice-warning');
+  if (warningEl) {
+    warningEl.textContent = data.message;
+    warningEl.style.display = 'block';
+    // Auto-hide after 10 seconds
+    setTimeout(() => {
+      warningEl.style.display = 'none';
+    }, 10000);
+  }
 }
 
 async function getMicrophone() {
@@ -225,7 +315,9 @@ function sendMessage() {
 }
 
 window.addEventListener("load", () => {
+  // Initialize Session UUID and User ID
   const sessionUUID = initUUID();
+  const userID = initUserID();
 
   const languageSelect = document.getElementById('language-select');
   if (languageSelect) {
@@ -257,13 +349,15 @@ window.addEventListener("load", () => {
     });
   }
 
-  const websocketUrl = getWebSocketURL(`/ws/phone?language=${language}&role=${role}&session_id=${sessionUUID}`);
-  console.log({ websocketUrl });
+  // Include user_id in WebSocket URL (required for voice usage tracking)
+  const websocketUrl = getWebSocketURL(`/ws/phone?language=${language}&role=${role}&session_id=${sessionUUID}&user_id=${userID}`);
+  console.log({ websocketUrl, userID, sessionUUID });
 
   socket = new WebSocket(websocketUrl);
 
   socket.onopen = async () => {
     console.log('WebSocket connection opened');
+    console.log(`Connected with User ID: ${userID}, Session ID: ${sessionUUID}`);
     setTimeout(() => { }, 1000)
     await start(socket);
   };
@@ -271,6 +365,23 @@ window.addEventListener("load", () => {
   socket.onmessage = (event) => {
     let event_parsed = JSON.parse(event.data);
     console.log(`Data-Rcvd : ${JSON.stringify(event_parsed)}`);
+
+    // Handle voice limit notifications
+    if (event_parsed.type === 'voice_limit_reached') {
+      handleVoiceLimitReached(event_parsed);
+      return;
+    }
+
+    if (event_parsed.type === 'voice_disabled') {
+      console.log('[VOICE_DISABLED]', event_parsed.reason);
+      voiceEnabled = false;
+      return;
+    }
+
+    if (event_parsed.type === 'voice_usage_warning') {
+      handleVoiceWarning(event_parsed);
+      return;
+    }
 
     if (event_parsed.is_text == true) {
       console.log("---> Text", { event_parsed })
