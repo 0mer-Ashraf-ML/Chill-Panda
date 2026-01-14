@@ -52,6 +52,7 @@ class Conversation:
     Represents a conversation session.
     """
     session_id: str  # Unique session identifier (e.g., WebSocket guid)
+    user_id: str = "anonymous"  # User identifier for session ownership
     source: str = "web"  # Source of conversation (web, phone, etc.)
     status: Literal["active", "ended"] = "active"
     primary_language: Optional[str] = None  # Primary detected language

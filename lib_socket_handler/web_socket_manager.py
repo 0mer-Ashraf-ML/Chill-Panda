@@ -254,8 +254,54 @@ class WebsocketManager(Disposable):
             asyncio.create_task(self.close_connection()),
             # check for socket connection state
             asyncio.create_task(self.check_connection()),
+            # check for voice limit events
+            asyncio.create_task(self.websocket_put_voice_limit_event()),
+            # check for voice abuse events
+            asyncio.create_task(self.websocket_put_voice_abuse_event()),
+            # check for voice usage updates
+            asyncio.create_task(self.websocket_put_voice_usage_update()),
         ]
         await asyncio.gather(*tasks)
+
+    async def websocket_put_voice_limit_event(self):
+        """Send voice limit reached notification to client."""
+        async with await self.dispatcher.subscribe(
+            self.guid, MessageType.VOICE_LIMIT_REACHED
+        ) as subscriber:
+            async for event in subscriber:
+                usage_data = event.message.data
+                limit_data = {
+                    "type": "voice_limit_reached",
+                    "is_voice_disabled": True,
+                    "limit_type": usage_data.get("limit_type"),  # session/daily/monthly
+                    "upgrade_required": True,
+                    "voice_usage": usage_data
+                }
+                await self.send(limit_data)
+
+    async def websocket_put_voice_abuse_event(self):
+        """Send abuse detection notification to client."""
+        async with await self.dispatcher.subscribe(
+            self.guid, MessageType.VOICE_ABUSE_DETECTED
+        ) as subscriber:
+            async for event in subscriber:
+                abuse_data = event.message.data
+                await self.send({
+                    "type": "voice_abuse_detected",
+                    "abuse_type": abuse_data.get("abuse_type"),
+                    "message": abuse_data.get("message")
+                })
+
+    async def websocket_put_voice_usage_update(self):
+        """Periodically send voice usage stats to client."""
+        async with await self.dispatcher.subscribe(
+            self.guid, MessageType.VOICE_USAGE_UPDATE
+        ) as subscriber:
+            async for event in subscriber:
+                await self.send({
+                    "type": "voice_usage_update",
+                    "voice_usage": event.message.data
+                })
 
     async def dispose(self):
         # Cancel all running tasks

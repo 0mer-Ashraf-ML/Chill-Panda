@@ -20,6 +20,11 @@ from lib_infrastructure.helpers.global_event_logger import GlobalLoggerAsync
 from contextlib import asynccontextmanager
 from app.api import router
 from app.mongodb_manager import mongodb_manager
+# database imports
+from lib_database import Database, ConversationRepository
+from lib_database.database_handler import DatabaseHandler
+from lib_database.voice_usage_repository import VoiceUsageRepository
+from lib_voice_usage.voice_usage_handler import VoiceUsageHandler
 
 # loading .env configs
 load_dotenv()
@@ -29,6 +34,14 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
+
+# Voice Usage Limits (from env)
+VOICE_LIMIT_SESSION = int(os.getenv("VOICE_LIMIT_PER_SESSION_SECONDS", 30))
+VOICE_LIMIT_DAY = int(os.getenv("VOICE_LIMIT_PER_DAY_SECONDS", 60))
+VOICE_LIMIT_MONTH = int(os.getenv("VOICE_LIMIT_PER_MONTH_SECONDS", 600))
+VOICE_ABUSE_CONTINUOUS = int(os.getenv("VOICE_ABUSE_CONTINUOUS_THRESHOLD_SECONDS", 300))
+VOICE_ABUSE_SESSION_COUNT = int(os.getenv("VOICE_ABUSE_SESSION_COUNT_THRESHOLD", 10))
+VOICE_ABUSE_LONG_SESSION = int(os.getenv("VOICE_ABUSE_LONG_SESSION_THRESHOLD_SECONDS", 180))
 
 
 @asynccontextmanager
@@ -149,7 +162,8 @@ async def websocket_endpoint(
     source: SourceEnum,
     language: LanguageEnum | None = None,
     role: RoleEnum | None = None,
-    session_id: str | None = None  # Optional UUID from frontend
+    session_id: str | None = None,  # Optional UUID from frontend
+    user_id: str | None = None  # Optional user_id
 ):
     # Use provided session_id if valid, otherwise generate new UUID
     if session_id and len(session_id) == 36:  # Basic UUID format validation
@@ -157,13 +171,37 @@ async def websocket_endpoint(
     else:
         guid = str(uuid.uuid4())
 
-    print(f"WebSocket connection established via => {source.value} with UID => {guid} & language => {language.value if language else 'en'} & role => {role.value if role else 'None'}")
+    print(f"WebSocket connection established via => {source.value} with UID => {guid} & language => {language.value if language else 'en'} & role => {role.value if role else 'None'} & user_id => {user_id or 'anonymous'}")
 
+    # Initialize database and repository
+    db = Database()
+    await db.connect()
+    repository = ConversationRepository(db)
+    
+    # Get or create session for user
+    actual_user_id = user_id or "anonymous"
+    conversation, is_new_session = await repository.get_or_create_session(
+        session_id=guid,
+        user_id=actual_user_id,
+        source=source.value
+    )
+    
     prompt_generator = PromptGenerator(language, role)
-    # print("\nPrompt Being Used:")
-    # print("\n**START**")
-    # print(str(prompt_generator))
-    # print("\n**END**")
+    
+    # If existing session, load last 20 messages and append summary to prompt
+    if not is_new_session:
+        messages = await repository.get_last_n_messages(conversation.id, n=20)
+        if messages:
+            summary = repository.generate_conversation_summary(messages)
+            prompt_generator.append_conversation_context(summary)
+            print(f"📚 Loaded {len(messages)} previous messages for session {guid[:8]}...")
+    else:
+        print(f"🆕 New session created for user {actual_user_id}")
+    
+    print("\nPrompt Being Used:")
+    print("\n**START**")
+    print(str(prompt_generator))
+    print("\n**END**")
     modelInstance = LLM(guid , prompt_generator, OPENAI_API_KEY)
     # You can now use the 'language' variable in your logic as needed
 
@@ -194,6 +232,25 @@ async def websocket_endpoint(
     # text_to_speeech = TextToSpeechElevenLabs( guid  , dispatcher , ELEVENLABS_API_KEY, voice_id="OjkyUe8dIihIFvOisuvM" )
     # text_to_speeech = TextToSpeechDeepgram( guid  , dispatcher , DEEPGRAM_API_KEY )
     text_to_speeech = TextToSpeechMinimax( guid  , dispatcher , MINIMAX_API_KEY , voice_id=language.value )
+    
+    # Initialize database handler for saving conversations
+    database_handler = DatabaseHandler(guid, dispatcher, repository, conversation.id)
+
+    # # Initialize voice usage tracking
+    voice_repo = VoiceUsageRepository(db)
+    
+    voice_config = {
+        "session_limit": VOICE_LIMIT_SESSION,
+        "daily_limit": VOICE_LIMIT_DAY,
+        "monthly_limit": VOICE_LIMIT_MONTH,
+        "abuse_continuous_threshold": VOICE_ABUSE_CONTINUOUS,
+        "abuse_session_count": VOICE_ABUSE_SESSION_COUNT,
+        "abuse_long_session_threshold": VOICE_ABUSE_LONG_SESSION
+    }
+    
+    voice_usage_handler = VoiceUsageHandler(
+        guid, dispatcher, voice_repo, actual_user_id, voice_config
+    )
 
     try:
 
@@ -203,6 +260,8 @@ async def websocket_endpoint(
             asyncio.create_task(large_language_model.run_async()),
             asyncio.create_task(text_to_speeech.run_async()),            
             asyncio.create_task(websocket_manager.run_async()),
+            asyncio.create_task(database_handler.run_async()),  # Save conversations to DB
+            asyncio.create_task(voice_usage_handler.run_async()), # Track voice usage
         ]
 
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
@@ -223,6 +282,8 @@ async def websocket_endpoint(
         await dispatcher.broadcast(
             guid , Message(MessageHeader(MessageType.CALL_ENDED), "Call ended") 
             )
+        # Disconnect database
+        await db.disconnect()
 
 
 @app.get(

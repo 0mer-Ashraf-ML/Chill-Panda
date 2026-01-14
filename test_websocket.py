@@ -69,7 +69,7 @@ class WebSocketTester:
         
     @property
     def ws_url(self) -> str:
-        url = f"ws://{self.host}:{self.port}/ws/{self.source}?language={self.language}&session_id={self.session_id}"
+        url = f"ws://{self.host}:{self.port}/ws/{self.source}?language={self.language}&session_id={self.session_id}&user_id=new_test_user123"
         if self.role:
             url += f"&role={self.role.value}"
         return url

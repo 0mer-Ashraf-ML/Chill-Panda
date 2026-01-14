@@ -26,6 +26,7 @@ class ConversationRepository:
     async def create_conversation(
         self,
         session_id: str,
+        user_id: str = "anonymous",
         source: str = "web",
         metadata: Optional[dict] = None
     ) -> Conversation:
@@ -34,6 +35,7 @@ class ConversationRepository:
         
         Args:
             session_id: Unique session identifier (WebSocket guid)
+            user_id: User identifier for session ownership
             source: Source of the conversation (web, phone, etc.)
             metadata: Additional metadata
             
@@ -42,14 +44,68 @@ class ConversationRepository:
         """
         conversation = Conversation(
             session_id=session_id,
+            user_id=user_id,
             source=source,
             metadata=metadata or {}
         )
         
         await self.db.conversations.insert_one(conversation.to_dict())
-        print(f"📝 Created conversation: {conversation.id} for session: {session_id}")
+        print(f"📝 Created conversation: {conversation.id} for session: {session_id}, user: {user_id}")
         
         return conversation
+    
+    async def get_or_create_session(
+        self,
+        session_id: str,
+        user_id: str,
+        source: str = "web"
+    ) -> tuple[Conversation, bool]:
+        """
+        Get existing session or create a new one.
+        
+        Args:
+            session_id: Session identifier
+            user_id: User identifier
+            source: Source of conversation
+            
+        Returns:
+            Tuple of (Conversation, is_new_session)
+        """
+        existing = await self.get_session_by_user_and_session(session_id, user_id)
+        if existing:
+            return existing, False
+        
+        # Create new session
+        conversation = await self.create_conversation(
+            session_id=session_id,
+            user_id=user_id,
+            source=source
+        )
+        return conversation, True
+    
+    async def get_session_by_user_and_session(
+        self,
+        session_id: str,
+        user_id: str
+    ) -> Optional[Conversation]:
+        """
+        Get conversation by session_id and user_id.
+        
+        Args:
+            session_id: Session ID
+            user_id: User ID
+            
+        Returns:
+            Conversation object or None
+        """
+        data = await self.db.conversations.find_one({
+            "session_id": session_id,
+            "user_id": user_id,
+            "status": "active"
+        })
+        if data:
+            return Conversation.from_dict(data)
+        return None
     
     async def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
         """
@@ -320,3 +376,51 @@ class ConversationRepository:
             print(f"🗑️ Deleted conversation: {conversation_id}")
             return True
         return False
+    
+    async def get_last_n_messages(
+        self,
+        conversation_id: str,
+        n: int = 20
+    ) -> List[Message]:
+        """
+        Get the last N messages from a conversation.
+        
+        Args:
+            conversation_id: Conversation ID
+            n: Number of messages to retrieve (default: 20)
+            
+        Returns:
+            List of Message objects in chronological order
+        """
+        cursor = self.db.messages.find(
+            {"conversation_id": conversation_id}
+        ).sort("created_at", -1).limit(n)
+        
+        messages = []
+        async for data in cursor:
+            messages.append(Message.from_dict(data))
+        
+        # Reverse to get chronological order
+        return list(reversed(messages))
+    
+    def generate_conversation_summary(self, messages: List[Message]) -> str:
+        """
+        Generate a text summary of conversation messages.
+        
+        Args:
+            messages: List of Message objects
+            
+        Returns:
+            Formatted summary string
+        """
+        if not messages:
+            return ""
+        
+        summary_parts = ["Here is a summary of the previous conversation:"]
+        for msg in messages:
+            role = "User" if msg.role.value == "user" else "Assistant"
+            # Truncate long messages
+            content = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
+            summary_parts.append(f"- {role}: {content}")
+        
+        return "\n".join(summary_parts)

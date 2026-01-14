@@ -56,6 +56,8 @@ class Database:
             # Conversations collection indexes
             conversations = self.db.conversations
             await conversations.create_index("session_id")
+            await conversations.create_index("user_id")
+            await conversations.create_index([("user_id", 1), ("session_id", 1)])
             await conversations.create_index("created_at")
             await conversations.create_index([("session_id", 1), ("created_at", -1)])
             

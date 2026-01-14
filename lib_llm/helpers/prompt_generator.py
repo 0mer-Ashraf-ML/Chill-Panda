@@ -40,6 +40,17 @@ class PromptGenerator:
 
     def serialize_prompt(self):
         return self.prompt.strip()
+    
+    def append_conversation_context(self, summary: str) -> None:
+        """
+        Append conversation history summary to the prompt.
+        
+        Args:
+            summary: Formatted summary of previous messages
+        """
+        if summary:
+            self.prompt += f"\n\n## Previous Conversation Context\n{summary}"
+            print(f"📜 Appended conversation context to prompt ({len(summary)} chars)")
 
     def __repr__(self):
         return self.prompt

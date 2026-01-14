@@ -30,6 +30,9 @@ class MessageType(enum.Enum):
     SPEECH_DETECTED = 22 
     SPEECH_ENDED = 23
     CRISIS_DETECTED = 24
+    VOICE_LIMIT_REACHED = 25
+    VOICE_ABUSE_DETECTED = 26
+    VOICE_USAGE_UPDATE = 27
 
 
 class MessageHeader:
