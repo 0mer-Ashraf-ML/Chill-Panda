@@ -80,10 +80,6 @@ class RAGChat:
     ) -> str:
         messages = self._build_messages(user_message, role, conversation_history)
 
-        print("----- Message -----")
-        print(messages)
-        print("----- END -----")
-
         response = client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
             messages=messages,
@@ -100,10 +96,6 @@ class RAGChat:
         conversation_history: List[Dict] = None
     ):
         messages = self._build_messages(user_message, role, conversation_history)
-
-        print("----- Message -----")
-        print(messages)
-        print("----- END -----")
 
         stream = client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
