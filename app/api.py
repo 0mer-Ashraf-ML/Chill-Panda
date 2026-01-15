@@ -23,6 +23,13 @@ router = APIRouter(prefix="/api/v1")
 async def chat(req: ChatRequest):
     history = mongodb_manager.get_conversation_history(req.session_id, limit=10)
 
+    # print("----- User Message ------")
+    # print(req.input_text)
+    # print("----- END -----")
+    # print("----- Conversation History -----")
+    # print(history)
+    # print("----- END -----")
+
     ai_reply = generate_ai_reply(
         user_message=req.input_text,
         # language=req.language,
@@ -79,6 +86,12 @@ async def chat_stream(req: ChatRequest):
             }
         )
 
+        # print("----- User Message ------")
+        # print(req.input_text)
+        # print("----- END -----")
+        # print("----- Conversation History -----")
+        # print(history)
+        # print("----- END -----")
 
         full_reply = ""
 
