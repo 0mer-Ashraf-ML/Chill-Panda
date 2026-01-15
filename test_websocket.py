@@ -19,12 +19,14 @@ from typing import Optional
 from api_request_schemas import RoleEnum
 
 # Configuration
-HOST = "localhost"
-PORT = 8000
+HOST = "chat.thechillpanda.com"
+# PORT = 8000
+PORT = ""
 SOURCE = "device"  # or "phone"
 LANGUAGE = "en"    # "en", "zh-HK", "zh-TW"
 ROLE = RoleEnum.loyal_best_friend
 AUDIO_OUTPUT_DIR = "test_socket_audio"
+user_id = "new_test_user1"
 
 class WebSocketTester:
     def __init__(
@@ -34,6 +36,7 @@ class WebSocketTester:
         source: str = SOURCE,
         language: str = LANGUAGE,
         role: RoleEnum = ROLE,
+        user_id: Optional[str] = user_id,
         session_id: Optional[str] = None
     ):
         self.host = host
@@ -41,6 +44,7 @@ class WebSocketTester:
         self.source = source
         self.language = language
         self.role = role
+        self.user_id = user_id
         self.session_id = session_id or str(uuid.uuid4())
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
         self.audio_chunk_count = 0
@@ -69,7 +73,7 @@ class WebSocketTester:
         
     @property
     def ws_url(self) -> str:
-        url = f"ws://{self.host}:{self.port}/ws/{self.source}?language={self.language}&session_id={self.session_id}"
+        url = f"ws://{self.host}:{self.port}/ws/{self.source}?language={self.language}&session_id={self.session_id}&user_id={self.user_id}"
         if self.role:
             url += f"&role={self.role.value}"
         return url
