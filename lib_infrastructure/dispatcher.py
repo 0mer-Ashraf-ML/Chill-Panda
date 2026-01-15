@@ -27,9 +27,14 @@ class MessageType(enum.Enum):
     TTS_FLUSH = 19
     STRUCTURED_DATA = 20
     IS_DORMANT = 21
-    SPEECH_DETECTED = 22 
+    SPEECH_DETECTED = 22
     SPEECH_ENDED = 23
     CRISIS_DETECTED = 24
+    # Voice Usage Limit Events
+    VOICE_LIMIT_REACHED = 25      # Sent when a voice limit is reached
+    VOICE_DISABLED = 26           # Sent when voice is disabled for the session
+    VOICE_USAGE_WARNING = 27      # Sent when approaching a limit (e.g., 80% used)
+    VOICE_AUDIO_TRACKED = 28      # Internal event for audio chunk tracking
 
 
 class MessageHeader:

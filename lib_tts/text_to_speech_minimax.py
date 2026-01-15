@@ -15,6 +15,7 @@ class TextToSpeechMinimax:
     - Keep audio listener running continuously
     - Ensure connection is ready before sending
     - Proper task lifecycle management
+    - Voice usage tracking integration
     """
 
     def __init__(
@@ -23,11 +24,13 @@ class TextToSpeechMinimax:
         dispatcher: Dispatcher,
         api_key,
         voice_id="English_expressive_narrator",
-        model="speech-2.6-hd"
+        model="speech-2.6-hd",
+        voice_tracker=None  # VoiceUsageTracker instance for usage tracking
     ):
         self.guid = guid
         self.dispatcher = dispatcher
         self.api_key = api_key
+        self.voice_tracker = voice_tracker  # Voice usage tracker
         if voice_id is None:
             voice_id = "English_expressive_narrator"
         elif voice_id == "zh-HK":
@@ -225,6 +228,14 @@ class TextToSpeechMinimax:
                             audio_bytes = bytes.fromhex(audio_hex)
                             base64_audio = base64.b64encode(audio_bytes).decode("utf-8")
 
+                            # Check voice usage limits before sending
+                            if self.voice_tracker:
+                                allowed = await self.voice_tracker.track_audio_chunk(base64_audio)
+                                if not allowed:
+                                    print(f"🚫 Voice limit reached - stopping audio")
+                                    self.is_interrupted = True
+                                    continue
+
                             data_object = {"is_text": False, "audio": base64_audio}
 
                             await self.dispatcher.broadcast(
@@ -275,9 +286,14 @@ class TextToSpeechMinimax:
         """Send text to Minimax for TTS"""
         if not text.strip():
             return
-            
+
         if self.is_interrupted:
             print(f"🚫 Skipping send - interrupted")
+            return
+
+        # Check if voice is still enabled (not at limit)
+        if self.voice_tracker and not self.voice_tracker.is_voice_enabled():
+            print(f"🚫 Voice disabled - skipping TTS")
             return
 
         if not await self.ensure_connection():

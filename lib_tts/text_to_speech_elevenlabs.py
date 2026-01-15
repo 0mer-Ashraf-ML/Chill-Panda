@@ -10,17 +10,19 @@ from lib_infrastructure.dispatcher import (
 
 class TextToSpeechElevenLabs:
     """
-    FIXED v3: 
+    FIXED v3:
     - Keep audio listener running (don't break on isFinal)
     - Ensure connection is ready before sending
     - Wait for all audio before ending
+    - Voice usage tracking integration
     """
-    def __init__(self, guid, dispatcher: Dispatcher, api_key, voice_id="21m00Tcm4TlvDq8ikWAM", model_id="eleven_flash_v2_5"):
-        self.guid = guid 
+    def __init__(self, guid, dispatcher: Dispatcher, api_key, voice_id="21m00Tcm4TlvDq8ikWAM", model_id="eleven_flash_v2_5", voice_tracker=None):
+        self.guid = guid
         self.dispatcher = dispatcher
         self.api_key = api_key
         self.voice_id = voice_id
         self.model_id = model_id
+        self.voice_tracker = voice_tracker  # Voice usage tracker
         
         # WebSocket connection
         self.websocket = None
@@ -152,8 +154,17 @@ class TextToSpeechElevenLabs:
                     
                     if data.get("audio"):
                         audio_data = data["audio"]
+
+                        # Check voice usage limits before sending
+                        if self.voice_tracker:
+                            allowed = await self.voice_tracker.track_audio_chunk(audio_data)
+                            if not allowed:
+                                print(f"🚫 Voice limit reached - stopping audio")
+                                self.is_interrupted = True
+                                continue
+
                         data_object = {"is_text": False, "audio": audio_data}
-                        
+
                         await self.dispatcher.broadcast(
                             self.guid,
                             Message(
@@ -209,11 +220,16 @@ class TextToSpeechElevenLabs:
         """Send text to ElevenLabs WebSocket"""
         if not text.strip() and not flush:
             return
-        
+
         if self.is_interrupted and not flush:
             print(f"🚫 Skipping send_text - user interrupted")
             return
-        
+
+        # Check if voice is still enabled (not at limit)
+        if self.voice_tracker and not self.voice_tracker.is_voice_enabled() and not flush:
+            print(f"🚫 Voice disabled - skipping TTS")
+            return
+
         # Ensure connection before sending
         if not await self.ensure_connection():
             print("❌ Cannot send text - WebSocket connection failed")
