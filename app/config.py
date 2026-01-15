@@ -32,9 +32,9 @@ EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-ada-002')
 OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
 
 # Voice Usage Limits Configuration (in minutes)
-VOICE_LIMIT_SESSION_MINUTES = int(os.getenv('VOICE_LIMIT_SESSION_MINUTES', '10'))  # 10 minutes per session
-VOICE_LIMIT_DAILY_MINUTES = int(os.getenv('VOICE_LIMIT_DAILY_MINUTES', '50'))      # 50 minutes per day
-VOICE_LIMIT_MONTHLY_MINUTES = int(os.getenv('VOICE_LIMIT_MONTHLY_MINUTES', '200')) # 200 minutes per month
+VOICE_LIMIT_SESSION_MINUTES = int(os.getenv('VOICE_LIMIT_SESSION_MINUTES', '1'))  # 10 minutes per session
+VOICE_LIMIT_DAILY_MINUTES = int(os.getenv('VOICE_LIMIT_DAILY_MINUTES', '3'))      # 50 minutes per day
+VOICE_LIMIT_MONTHLY_MINUTES = int(os.getenv('VOICE_LIMIT_MONTHLY_MINUTES', '2')) # 200 minutes per month
 
 # Voice Usage Tracking Configuration
 VOICE_USAGE_ENABLED = os.getenv('VOICE_USAGE_ENABLED', 'true').lower() == 'true'
