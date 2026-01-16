@@ -20,6 +20,7 @@ from lib_infrastructure.helpers.global_event_logger import GlobalLoggerAsync
 from contextlib import asynccontextmanager
 from app.api import router
 from app.mongodb_manager import mongodb_manager
+from app.voice_management_api import management_router
 # Voice usage tracking imports
 from lib_database.database import Database
 from lib_voice_usage.voice_usage_tracker import VoiceUsageTracker, VoiceUsageInterceptor
@@ -135,6 +136,7 @@ dispatcher = Dispatcher()
 voice_usage_database = Database()
 
 app.include_router(router)
+app.include_router(management_router)
 
 # managing dispatcher connect event on app startup
 
