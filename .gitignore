@@ -15,3 +15,4 @@ test.py/
 .venv
 .env
 main.log
+test_*.py

@@ -178,10 +178,10 @@ async def websocket_endpoint(
     source: SourceEnum,
     language: LanguageEnum | None = None,
     role: RoleEnum | None = None,
-    session_id: str | None = None,  # Optional UUID from frontend
+    session_id: str | None = None,
     user_id: str = Query(..., description="Required user identifier for usage tracking")
 ):
-    # Validate user_id is provided and not empty
+    # Validate user_id
     if not user_id or not user_id.strip():
         await websocket.close(code=4001, reason="user_id is required")
         return
@@ -189,7 +189,7 @@ async def websocket_endpoint(
     user_id = user_id.strip()
 
     # Use provided session_id if valid, otherwise generate new UUID
-    if session_id and len(session_id) == 36:  # Basic UUID format validation
+    if session_id and len(session_id) == 36:
         guid = session_id
     else:
         guid = str(uuid.uuid4())
@@ -197,103 +197,125 @@ async def websocket_endpoint(
     print(f"WebSocket connection established via => {source.value} with UID => {guid} & user_id => {user_id[:8]}... & language => {language.value if language else 'en'} & role => {role.value if role else 'None'}")
 
     prompt_generator = PromptGenerator(language, role)
-    modelInstance = LLM(guid , prompt_generator, OPENAI_API_KEY)
+    modelInstance = LLM(guid, prompt_generator, OPENAI_API_KEY)
 
     # Initialize voice usage tracker
     voice_tracker = None
     voice_interceptor = None
     if VOICE_USAGE_ENABLED:
-        voice_tracker = VoiceUsageTracker(
-            guid=guid,
-            user_id=user_id,
-            dispatcher=dispatcher,
-            database=voice_usage_database
-        )
-        # Initialize and check if user has remaining quota
-        usage_summary = await voice_tracker.initialize()
-        if not usage_summary.voice_enabled:
-            print(f"[VoiceUsage] User {user_id[:8]}... already at limit: {usage_summary.limit_reached}")
+        try:
+            voice_tracker = VoiceUsageTracker(
+                guid=guid,
+                user_id=user_id,
+                dispatcher=dispatcher,
+                database=voice_usage_database
+            )
+            usage_summary = await voice_tracker.initialize()
+            if not usage_summary.voice_enabled:
+                print(f"[VoiceUsage] User {user_id[:8]}... already at limit: {usage_summary.limit_reached}")
 
-        voice_interceptor = VoiceUsageInterceptor(
-            guid=guid,
-            tracker=voice_tracker,
-            dispatcher=dispatcher
-        )
+            voice_interceptor = VoiceUsageInterceptor(
+                guid=guid,
+                tracker=voice_tracker,
+                dispatcher=dispatcher
+            )
+        except Exception as e:
+            print(f"❌ [ERROR] Failed to initialize voice tracker: {e}")
+            import traceback
+            traceback.print_exc()
 
-    global_logger = GlobalLoggerAsync(
-        guid,
-        dispatcher,
-        pubsub_events={
-            MessageType.CALL_WEBSOCKET_PUT: True,
-            MessageType.LLM_GENERATED_TEXT: True,
-            MessageType.TRANSCRIPTION_CREATED: True,
-            MessageType.FINAL_TRANSCRIPTION_CREATED : True,
-            MessageType.LLM_GENERATED_FULL_TEXT : True,
-            MessageType.CALL_WEBSOCKET_GET : False
-
-        },
-        # events whose output needs to be ignored, we just need to capture the time they are fired
-        ignore_msg_events = {
-            MessageType.CALL_WEBSOCKET_PUT: True,
-            MessageType.CALL_WEBSOCKET_GET : True
-        }
-
-    )
-
-    # Pass voice_tracker to WebSocket manager for limit notifications
+    # Setup components
     websocket_manager = WebsocketManager(
         guid, modelInstance, dispatcher, websocket, source,
         voice_tracker=voice_tracker
     )
-    speech_to_text = SpeechToTextDeepgram( guid , dispatcher ,  websocket , DEEPGRAM_API_KEY, language=language.value )
-    large_language_model = LargeLanguageModel( guid , modelInstance , dispatcher, source.value )
-    # To use ElevenLabs TTS instead, uncomment and add voice_tracker:
-    # text_to_speeech = TextToSpeechElevenLabs( guid, dispatcher, ELEVENLABS_API_KEY, voice_id="OjkyUe8dIihIFvOisuvM", voice_tracker=voice_tracker )
-    # To use Deepgram TTS instead, uncomment and add voice_tracker:
-    # text_to_speeech = TextToSpeechDeepgram( guid, dispatcher, DEEPGRAM_API_KEY, voice_tracker=voice_tracker )
+    speech_to_text = SpeechToTextDeepgram(guid, dispatcher, websocket, DEEPGRAM_API_KEY, language=language.value)
+    large_language_model = LargeLanguageModel(guid, modelInstance, dispatcher, source.value)
     text_to_speeech = TextToSpeechMinimax(
         guid, dispatcher, MINIMAX_API_KEY,
         voice_id=language.value,
         voice_tracker=voice_tracker
     )
 
+    tasks = []
+    error_occurred = None
+    
     try:
         tasks = [
-            asyncio.create_task(global_logger.run_async()),
-            asyncio.create_task(speech_to_text.run_async()),
-            asyncio.create_task(large_language_model.run_async()),
-            asyncio.create_task(text_to_speeech.run_async()),
-            asyncio.create_task(websocket_manager.run_async()),
+            asyncio.create_task(speech_to_text.run_async(), name="STT"),
+            asyncio.create_task(large_language_model.run_async(), name="LLM"),
+            asyncio.create_task(text_to_speeech.run_async(), name="TTS"),
+            asyncio.create_task(websocket_manager.run_async(), name="WebSocket"),
         ]
 
-        # Add voice interceptor task if enabled
         if voice_interceptor:
-            tasks.append(asyncio.create_task(voice_interceptor.run_async()))
+            tasks.append(asyncio.create_task(voice_interceptor.run_async(), name="VoiceInterceptor"))
 
+        # Wait for first task to complete or raise exception
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
-        for task in pending:
-            task.cancel()
+        
+        # Check if any task had an exception
+        for task in done:
+            try:
+                task.result()
+            except Exception as e:
+                error_occurred = e
+                print(f"❌ [ERROR] Task '{task.get_name()}' failed with exception:")
+                print(f"   {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+                break
 
+        # Cancel pending tasks
         if pending:
+            print(f"⚠️ Cancelling {len(pending)} pending tasks due to error or completion")
+            for task in pending:
+                print(f"   - Cancelling: {task.get_name()}")
+                task.cancel()
+            
             await asyncio.gather(*pending, return_exceptions=True)
 
-        for task in done:
-            task.result()
     except asyncio.CancelledError:
+        print(f"⚠️ [INFO] WebSocket tasks cancelled for session {guid[:8]}...")
         await websocket_manager.dispose()
+        
     except Exception as e:
-        await websocket_manager.dispose()
-        # raise e
+        error_occurred = e
+        print(f"❌ [ERROR] Unexpected exception in WebSocket endpoint:")
+        print(f"   Session: {guid}")
+        print(f"   User: {user_id}")
+        print(f"   Error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        try:
+            await websocket_manager.dispose()
+        except Exception as dispose_error:
+            print(f"❌ [ERROR] Failed to dispose websocket manager: {dispose_error}")
+            
     finally:
         # End voice usage session
         if voice_tracker:
-            await voice_tracker.end_session()
+            try:
+                await voice_tracker.end_session()
+            except Exception as e:
+                print(f"❌ [ERROR] Failed to end voice session: {e}")
 
-        await dispatcher.broadcast(
-            guid , Message(MessageHeader(MessageType.CALL_ENDED), "Call ended")
+        # Broadcast call ended
+        try:
+            await dispatcher.broadcast(
+                guid, Message(MessageHeader(MessageType.CALL_ENDED), "Call ended")
             )
-
-
+        except Exception as e:
+            print(f"❌ [ERROR] Failed to broadcast call ended: {e}")
+        
+        # Log final status
+        if error_occurred:
+            print(f"🔴 WebSocket session ended WITH ERRORS - GUID: {guid[:8]}..., User: {user_id[:8]}...")
+            print(f"   Error was: {type(error_occurred).__name__}: {error_occurred}")
+        else:
+            print(f"✅ WebSocket session ended normally - GUID: {guid[:8]}..., User: {user_id[:8]}...")
+            
 @app.get(
     '/api/info',
     tags=["Health"],
