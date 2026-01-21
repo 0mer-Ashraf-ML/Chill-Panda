@@ -43,13 +43,23 @@
         <option value="coach">Coach</option>
         <option value="funny_friend">Funny Friend</option>
       </select>
-      <input type="text" id="uuid-field" placeholder="Session UUID" readonly />
-      <button id="generate-uuid-btn" title="Generate New UUID">
-        <i class="fas fa-sync-alt"></i> New
+    </div>
+    <div class="uuid-controls">
+      <input type="text" id="user-id-field" placeholder="User ID" readonly title="Your User ID (for voice usage tracking)" />
+      <button id="generate-user-id-btn" title="Generate New User ID">
+        <i class="fas fa-user"></i> New User
+      </button>
+      <input type="text" id="uuid-field" placeholder="Session ID" readonly title="Session ID (for conversation history)" />
+      <button id="generate-uuid-btn" title="Generate New Session ID">
+        <i class="fas fa-sync-alt"></i> New Session
       </button>
     </div>
-    <div class="uuid-help">Language & Session ID (auto-saved)</div>
+    <div class="uuid-help">User ID & Session ID (auto-saved)</div>
   </div>
+
+  <!-- Voice limit notifications -->
+  <div id="voice-limit-notification" style="display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#ff4444; color:white; padding:15px 25px; border-radius:8px; z-index:1000; font-weight:bold;"></div>
+  <div id="voice-warning" style="display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#ffaa00; color:black; padding:10px 20px; border-radius:8px; z-index:1000;"></div>
 
 
   <div id="chat_container" class="chat-container">
