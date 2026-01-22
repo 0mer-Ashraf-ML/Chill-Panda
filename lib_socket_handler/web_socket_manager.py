@@ -107,23 +107,6 @@ class WebsocketManager(Disposable):
         print(f"Conversation saved to {file_path} under ID {conversation_entry['id']}")
 
 
-    async def check_connection(self):
-        while True:
-            if (
-                self.ws.application_state == WebSocketState.DISCONNECTED
-                or self.ws.client_state == WebSocketState.DISCONNECTED
-            ):
-                print("ServerSocker : " ,  self.ws.application_state , "ClientSocket : " , self.ws.client_state )
-                await self.dispatcher.broadcast(
-                    self.guid,
-                    Message(MessageHeader(MessageType.CALL_ENDED), "Closed"),
-                )
-                # self.save_conversation_to_json(self.guid , self.modelInstance.messages)
-
-                break  # Exit the loop if the WebSocket is disconnected
-            await asyncio.sleep(1)
-
-
     async def websocket_get(self):
         try :
             if self.source == SourceEnum.device :
@@ -319,8 +302,6 @@ class WebsocketManager(Disposable):
             asyncio.create_task(self.websocket_put_clear_event()),
             # check for close connection events
             asyncio.create_task(self.close_connection()),
-            # check for socket connection state
-            asyncio.create_task(self.check_connection()),
             # Voice usage limit notifications
             asyncio.create_task(self.websocket_put_voice_limit_reached()),
             asyncio.create_task(self.websocket_put_voice_disabled()),
