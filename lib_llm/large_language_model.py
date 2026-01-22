@@ -45,6 +45,7 @@ class LargeLanguageModel:
         # DO NOT send clear buffer for TOOL or SYSTEM messages
         if message.role == LLM.Role.USER:
             self.is_generating = True
+            print(f"[LLM] Processing user message: \"{message.content[:50]}{'...' if len(message.content) > 50 else ''}\"")
             # Fire and forget crisis detection to not block the main response
             asyncio.create_task(self._check_for_crisis(message.content))
             
@@ -122,6 +123,7 @@ class LargeLanguageModel:
 
         self.is_generating = False
         words = "".join(llm_words)
+        print(f"[LLM] Response complete - Length: {len(words)} chars")
         # words = words.replace("```json", "").replace("```", "")
         # words = json.loads(words)
         # print("------------","LargeLanguageModel",words,"------------")

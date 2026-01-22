@@ -36,6 +36,7 @@ class WebsocketManager(Disposable):
     async def open(self):
         await self.ws.accept()
         self.state = WebSocketState.CONNECTED
+        print(f"[WS] Connection accepted - Session: {self.guid[:8]}...")
 
     async def stream_text(self):
         async for message in self.ws.iter_text():
@@ -124,15 +125,20 @@ class WebsocketManager(Disposable):
 
 
     async def websocket_get(self):
-        try : 
+        try :
             if self.source == SourceEnum.device :
                 reeciever = self.ws.iter_text
             elif self.source == SourceEnum.phone :
                 reeciever = self.ws.iter_bytes
             else :
                 raise RuntimeError("Invalid source type")
-            
+
+            chunk_count = 0
             async for message in reeciever():
+                chunk_count += 1
+                if chunk_count == 1 or chunk_count % 100 == 0:
+                    msg_size = len(message) if isinstance(message, (bytes, str)) else 0
+                    print(f"[WS] Audio received - Chunk #{chunk_count}, Size: {msg_size} bytes")
                 await self.dispatcher.broadcast(
                     self.guid,
                     Message(
@@ -141,16 +147,21 @@ class WebsocketManager(Disposable):
                 )
 
 
-        except RuntimeError : 
+        except RuntimeError :
             pass
 
 
     async def websocket_put(self):
+        audio_chunk_count = 0
         async with await self.dispatcher.subscribe(
             self.guid, MessageType.CALL_WEBSOCKET_PUT
         ) as subscriber:
             async for event in subscriber:
                 stream_data = event.message.data
+                if isinstance(stream_data, dict) and stream_data.get("audio"):
+                    audio_chunk_count += 1
+                    if audio_chunk_count == 1 or audio_chunk_count % 50 == 0:
+                        print(f"[WS] Audio sent to client - Chunk #{audio_chunk_count}")
                 await self.send( stream_data )
 
 

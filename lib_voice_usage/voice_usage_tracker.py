@@ -117,6 +117,10 @@ class VoiceUsageTracker:
                 # Check for abuse patterns on connection
                 await self._abuse_detector.check_on_connection()
 
+            # Delete any existing session with the same ID (handles reconnection)
+            # This ensures we can create a fresh session even if one exists
+            await self.repository.voice_sessions.delete_one({"session_id": self.guid})
+
             # Create session record
             await self.repository.create_session(self.guid, self.user_id)
 

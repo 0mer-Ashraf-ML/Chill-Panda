@@ -59,7 +59,7 @@ class SpeechToTextDeepgram :
         except Exception as e: pass
 
 
-    async def run_async(self) : 
+    async def run_async(self) :
         # Callback for onMessage deepgram event
         def on_message_deepgram(self , result, **kwargs):
             object_instance = kwargs.get("object_instance")
@@ -68,9 +68,9 @@ class SpeechToTextDeepgram :
             sentence = result.channel.alternatives[0].transcript
             if len(sentence) == 0:
                 return
-            
-            if result.speech_final or result.is_final : 
-                # print(f"User : {sentence}")
+
+            if result.speech_final or result.is_final :
+                print(f"[STT] Transcription complete: \"{sentence[:50]}{'...' if len(sentence) > 50 else ''}\"")
 
                 asyncio.run(
                     object_instance.dispatcher.broadcast(
@@ -102,14 +102,19 @@ class SpeechToTextDeepgram :
         )
 
         self.dg_connection.start(self.deepgram_options)
+        print(f"[STT] Deepgram connection started - Language: {self.language}")
 
         try:
+            chunk_count = 0
             async with await self.dispatcher.subscribe(
                 self.guid, MessageType.CALL_WEBSOCKET_GET
-            ) as websocket_get : 
+            ) as websocket_get :
                 async for event in websocket_get:
                     audio_chunk = event.message.data
                     if isinstance(audio_chunk, bytes):
+                        chunk_count += 1
+                        if chunk_count == 1:
+                            print(f"[STT] First audio chunk sent to Deepgram")
                         self.transcribe(audio_chunk)
                     elif isinstance(audio_chunk, str):
                         await self.handle_transcibed_text(audio_chunk)
