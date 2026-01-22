@@ -329,7 +329,8 @@ from pathlib import Path
 
 # Configuration
 HOST = "chat.thechillpanda.com"
-USER_ID = "test_user_123"
+# HOST = '''localhost:8000'''
+USER_ID = "test_user_1234"
 LANGUAGE = "en"
 ROLE = "loyal_best_friend"
 
@@ -350,7 +351,7 @@ class AudioWebSocketTester:
     
     @property
     def ws_url(self):
-        return (f"wss://{HOST}/ws/phone?"
+        return (f"ws://{HOST}/ws/phone?"
                 f"language={LANGUAGE}&"
                 f"role={ROLE}&"
                 f"session_id={self.session_id}&"
