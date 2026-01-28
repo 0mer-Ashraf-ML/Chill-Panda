@@ -11,12 +11,14 @@ class invoke_llm_schema(BaseModel):
 class SourceEnum(str, Enum):
     """
     Connection source for WebSocket streaming.
-    
-    - **device**: Web browser or desktop application
-    - **phone**: Mobile phone application
+
+    - **device**: Text-based connection (web browser typing)
+    - **phone**: Raw PCM audio streaming (Python clients, mobile apps) - expects linear16 @ 16kHz
+    - **web**: Browser audio streaming (MediaRecorder WebM/Opus) - auto-detected format
     """
     device = "device"
     phone = "phone"
+    web = "web"
 
 
 class LanguageEnum(str, Enum):

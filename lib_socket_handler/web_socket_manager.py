@@ -111,7 +111,8 @@ class WebsocketManager(Disposable):
         try :
             if self.source == SourceEnum.device :
                 reeciever = self.ws.iter_text
-            elif self.source == SourceEnum.phone :
+            elif self.source == SourceEnum.phone or self.source == SourceEnum.web :
+                # Both phone (raw PCM) and web (MediaRecorder WebM/Opus) send binary audio
                 reeciever = self.ws.iter_bytes
             else :
                 raise RuntimeError("Invalid source type")
@@ -278,6 +279,15 @@ class WebsocketManager(Disposable):
 
 
 
+    async def websocket_put_audio_end(self):
+        """Handle TTS audio generation complete event"""
+        async with await self.dispatcher.subscribe(
+            self.guid, MessageType.TTS_AUDIO_COMPLETE
+        ) as subscriber:
+            async for event in subscriber:
+                audio_end_data = { "audio_is_end": True }
+                await self.send( audio_end_data )
+
     async def run_async(self):
         await self.open()
         # async background tasks for handeling websocket conenctions
@@ -306,6 +316,8 @@ class WebsocketManager(Disposable):
             asyncio.create_task(self.websocket_put_voice_limit_reached()),
             asyncio.create_task(self.websocket_put_voice_disabled()),
             asyncio.create_task(self.websocket_put_voice_warning()),
+            # check for TTS audio generation complete event
+            asyncio.create_task(self.websocket_put_audio_end()),
         ]
         await asyncio.gather(*tasks)
 

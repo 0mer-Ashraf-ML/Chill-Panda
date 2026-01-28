@@ -350,7 +350,8 @@ window.addEventListener("load", () => {
   }
 
   // Include user_id in WebSocket URL (required for voice usage tracking)
-  const websocketUrl = getWebSocketURL(`/ws/phone?language=${language}&role=${role}&session_id=${sessionUUID}&user_id=${userID}`);
+  // Use 'web' source for browser MediaRecorder (WebM/Opus format)
+  const websocketUrl = getWebSocketURL(`/ws/web?language=${language}&role=${role}&session_id=${sessionUUID}&user_id=${userID}`);
   console.log({ websocketUrl, userID, sessionUUID });
 
   socket = new WebSocket(websocketUrl);

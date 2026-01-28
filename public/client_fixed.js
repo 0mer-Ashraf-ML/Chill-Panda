@@ -242,7 +242,8 @@ window.addEventListener("load", () => {
     });
   }
 
-  const websocketUrl = getWebSocketURL(`/ws/phone?language=${language}&session_id=${sessionUUID}`);
+  // Use 'web' source for browser MediaRecorder (WebM/Opus format)
+  const websocketUrl = getWebSocketURL(`/ws/web?language=${language}&session_id=${sessionUUID}`);
   console.log({ websocketUrl });
 
   socket = new WebSocket(websocketUrl);

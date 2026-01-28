@@ -35,6 +35,7 @@ class MessageType(enum.Enum):
     VOICE_DISABLED = 26           # Sent when voice is disabled for the session
     VOICE_USAGE_WARNING = 27      # Sent when approaching a limit (e.g., 80% used)
     VOICE_AUDIO_TRACKED = 28      # Internal event for audio chunk tracking
+    TTS_AUDIO_COMPLETE = 29       # Sent when TTS audio generation is fully complete
 
 
 class MessageHeader:

@@ -229,7 +229,7 @@ async def websocket_endpoint(
         guid, modelInstance, dispatcher, websocket, source,
         voice_tracker=voice_tracker
     )
-    speech_to_text = SpeechToTextDeepgram(guid, dispatcher, websocket, DEEPGRAM_API_KEY, language=language.value)
+    speech_to_text = SpeechToTextDeepgram(guid, dispatcher, websocket, DEEPGRAM_API_KEY, language=language.value, source=source.value)
     large_language_model = LargeLanguageModel(guid, modelInstance, dispatcher, source.value)
     text_to_speeech = TextToSpeechMinimax(
         guid, dispatcher, MINIMAX_API_KEY,

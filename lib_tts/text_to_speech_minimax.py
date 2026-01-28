@@ -252,6 +252,15 @@ class TextToSpeechMinimax:
                         self.is_task_started = False
                         if self.task_started_event:
                             self.task_started_event.clear()
+
+                        if not self.is_interrupted:
+                            await self.dispatcher.broadcast(
+                                self.guid,
+                                Message(
+                                    MessageHeader(MessageType.TTS_AUDIO_COMPLETE),
+                                    data={"audio_complete": True},
+                                ),
+                            )
                         # DON'T break - keep listening
 
                 except asyncio.TimeoutError:

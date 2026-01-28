@@ -6,30 +6,60 @@ from deepgram import ( DeepgramClient, LiveTranscriptionEvents, LiveOptions, Dee
 from lib_infrastructure.dispatcher import ( Dispatcher, Message, MessageHeader, MessageType )
 
 
-class SpeechToTextDeepgram : 
-    def __init__(self  , guid , dispatcher: Dispatcher , socket_conext , api_key, language="en" ) -> None:
+class SpeechToTextDeepgram :
+    def __init__(self, guid, dispatcher: Dispatcher, socket_conext, api_key, language="en", source="phone") -> None:
         self.guid = guid
         self.dispatcher = dispatcher
         self.api_key = api_key
         self.socket_context = socket_conext
         self.language = language
-        self.deepgram_config = DeepgramClientOptions( options={"keepalive": "true"} )
-        self.deepgram = DeepgramClient(api_key= self.api_key , config=self.deepgram_config )
+        self.source = source
+        self.deepgram_config = DeepgramClientOptions(options={"keepalive": "true"})
+        self.deepgram = DeepgramClient(api_key=self.api_key, config=self.deepgram_config)
         self.dg_connection = self.deepgram.listen.live.v("1")
-        self.deepgram_options = LiveOptions(
-            smart_format = True,
-            model = "nova-2-general",
-            punctuate=True,
-            # language="en-US",
-            language=self.language,
-            encoding="linear16",
-        sample_rate=16000,
-            channels=1,
-            interim_results=True,
-            utterance_end_ms=1000,
-            vad_events=True,
 
-        )    
+        # Configure Deepgram based on source type
+        if source == "phone":
+            # Raw PCM streaming from Python clients, mobile apps
+            # Expects linear16 (16-bit signed PCM) @ 16kHz mono
+            self.deepgram_options = LiveOptions(
+                smart_format=True,
+                model="nova-2-general",
+                punctuate=True,
+                language=self.language,
+                encoding="linear16",
+                sample_rate=16000,
+                channels=1,
+                interim_results=True,
+                utterance_end_ms=1000,
+                vad_events=True,
+            )
+            print(f"[STT] Configured for raw PCM (phone source)")
+        elif source == "web":
+            # Browser MediaRecorder sends WebM/Opus - Deepgram auto-detects
+            self.deepgram_options = LiveOptions(
+                smart_format=True,
+                model="nova-2-general",
+                punctuate=True,
+                language=self.language,
+                channels=1,
+                interim_results=True,
+                utterance_end_ms=1000,
+                vad_events=True,
+            )
+            print(f"[STT] Configured for browser audio (web source - auto-detect)")
+        else:
+            # device source - text-based, but set default options anyway
+            self.deepgram_options = LiveOptions(
+                smart_format=True,
+                model="nova-2-general",
+                punctuate=True,
+                language=self.language,
+                channels=1,
+                interim_results=True,
+                utterance_end_ms=1000,
+                vad_events=True,
+            )    
 
 
 
