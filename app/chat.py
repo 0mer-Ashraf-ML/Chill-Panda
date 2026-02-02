@@ -87,8 +87,10 @@ class RAGChat:
         response = client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
             messages=messages,
-            temperature=0.2,
-            max_tokens=250
+            temperature=0.7,  # Increase from 0.2 for more natural variation
+            max_tokens=200,
+            presence_penalty=0.3,  # ADD: Reduces repetition
+            frequency_penalty=0.3  # ADD: Encourages variety
         )
 
         return response.choices[0].message.content.strip()
