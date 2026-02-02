@@ -16,3 +16,4 @@ test.py/
 .env
 main.log
 test_*.py
+received_audio/*

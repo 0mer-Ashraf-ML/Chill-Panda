@@ -351,7 +351,7 @@ class AudioWebSocketTester:
     
     @property
     def ws_url(self):
-        return (f"ws://{HOST}/ws/phone?"
+        return (f"wss://{HOST}/ws/phone?"
                 f"language={LANGUAGE}&"
                 f"role={ROLE}&"
                 f"session_id={self.session_id}&"
