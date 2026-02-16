@@ -23,18 +23,21 @@ router = APIRouter(prefix="/api/v1")
 async def chat(req: ChatRequest):
     history = mongodb_manager.get_conversation_history(req.session_id, limit=10)
 
-    # print("----- User Message ------")
-    # print(req.input_text)
-    # print("----- END -----")
-    # print("----- Conversation History -----")
-    # print(history)
-    # print("----- END -----")
+    # Build playground params dict if provided
+    playground_params = None
+    if req.playground_params:
+        playground_params = {
+            k: v for k, v in req.playground_params.model_dump().items()
+            if v is not None
+        }
 
     ai_reply = generate_ai_reply(
         user_message=req.input_text,
-        # language=req.language,
         role=req.role,
-        conversation_history=history
+        conversation_history=history,
+        custom_system_prompt=req.custom_system_prompt,
+        model=req.model,
+        playground_params=playground_params
     )
 
     mongodb_manager.save_message(
@@ -86,20 +89,23 @@ async def chat_stream(req: ChatRequest):
             }
         )
 
-        # print("----- User Message ------")
-        # print(req.input_text)
-        # print("----- END -----")
-        # print("----- Conversation History -----")
-        # print(history)
-        # print("----- END -----")
+        # Build playground params dict if provided
+        playground_params = None
+        if req.playground_params:
+            playground_params = {
+                k: v for k, v in req.playground_params.model_dump().items()
+                if v is not None
+            }
 
         full_reply = ""
 
         for chunk in generate_streaming_ai_reply(
             user_message=req.input_text,
             role=req.role,
-            # language=req.language,
-            conversation_history=history
+            conversation_history=history,
+            custom_system_prompt=req.custom_system_prompt,
+            model=req.model,
+            playground_params=playground_params
         ):
             full_reply += chunk
 

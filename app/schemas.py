@@ -3,6 +3,45 @@ from typing import List, Optional, Literal
 from datetime import datetime
 
 
+class PlaygroundParams(BaseModel):
+    """Optional parameters for prompt experimentation playground mode."""
+
+    temperature: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description="Sampling temperature (0-2). Higher = more creative."
+    )
+
+    max_tokens: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=128000,
+        description="Maximum tokens in the response."
+    )
+
+    presence_penalty: Optional[float] = Field(
+        default=None,
+        ge=-2.0,
+        le=2.0,
+        description="Presence penalty (-2 to 2). Higher = less repetition."
+    )
+
+    frequency_penalty: Optional[float] = Field(
+        default=None,
+        ge=-2.0,
+        le=2.0,
+        description="Frequency penalty (-2 to 2). Higher = more variety."
+    )
+
+    reasoning_effort: Optional[Literal[
+        "none", "minimal", "low", "medium", "high", "xhigh"
+    ]] = Field(
+        default=None,
+        description="Reasoning effort level for GPT-5 family models."
+    )
+
+
 class ChatRequest(BaseModel):
     """Request model for sending a chat message to Chill Panda."""
 
@@ -38,6 +77,22 @@ class ChatRequest(BaseModel):
         default="best_friend",
         description="Emotional role used by Chill Panda to respond",
         examples=["best_friend"]
+    )
+
+    # --- Playground Mode Fields (Optional) ---
+    custom_system_prompt: Optional[str] = Field(
+        default=None,
+        description="Custom system prompt to override the default. If None, uses the standard Chill Panda prompt."
+    )
+
+    model: Optional[str] = Field(
+        default=None,
+        description="Model ID to use (e.g., 'gpt-4.1-nano', 'gpt-4o'). If None, uses the default."
+    )
+
+    playground_params: Optional[PlaygroundParams] = Field(
+        default=None,
+        description="Custom model parameters for experimentation."
     )
 
     model_config = {
