@@ -154,8 +154,14 @@ class RAGChat:
                 yield chunk.choices[0].delta.content
 
 
-# Singleton
-rag_chat = RAGChat()
+_rag_chat: Optional[RAGChat] = None
+
+
+def get_rag_chat() -> RAGChat:
+    global _rag_chat
+    if _rag_chat is None:
+        _rag_chat = RAGChat()
+    return _rag_chat
 
 
 def generate_ai_reply(
@@ -166,7 +172,7 @@ def generate_ai_reply(
     model=None,
     playground_params=None
 ):
-    return rag_chat.generate_response(
+    return get_rag_chat().generate_response(
         user_message,
         role,
         conversation_history,
@@ -184,7 +190,7 @@ def generate_streaming_ai_reply(
     model=None,
     playground_params=None
 ):
-    return rag_chat.generate_streaming_response(
+    return get_rag_chat().generate_streaming_response(
         user_message,
         role,
         conversation_history,

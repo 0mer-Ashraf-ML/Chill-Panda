@@ -9,9 +9,11 @@ import json
 from fastapi import WebSocket
 from fastapi.websockets import WebSocketState
 import asyncio , os
+from contextlib import suppress
 from lib_infrastructure.disposable import Disposable
 from api_request_schemas import SourceEnum
 from lib_llm.helpers.llm import LLM
+from lib_infrastructure.helpers.realtime_observability import SessionObserver
 
 
 class WebsocketManager(Disposable):
@@ -24,6 +26,7 @@ class WebsocketManager(Disposable):
         source : SourceEnum,
         logger=None,
         voice_tracker=None,  # VoiceUsageTracker instance for limit notifications
+        observer: SessionObserver | None = None,
     ):
         self.guid = guid
         self.modelInstance = modelInstance
@@ -32,11 +35,17 @@ class WebsocketManager(Disposable):
         self.source = source
         self.logger = logger
         self.voice_tracker = voice_tracker
+        self.observer = observer
+        self._tasks: list[asyncio.Task] = []
+        self.max_frame_bytes = 5 * 1024 * 1024
+        self.idle_timeout_seconds = 90
 
     async def open(self):
         await self.ws.accept()
         self.state = WebSocketState.CONNECTED
         print(f"[WS] Connection accepted - Session: {self.guid[:8]}...")
+        if self.observer:
+            self.observer.log("websocket", "connection_accepted")
 
     async def stream_text(self):
         async for message in self.ws.iter_text():
@@ -52,11 +61,20 @@ class WebsocketManager(Disposable):
         # await self.ws.send_bytes(message)
         if isinstance(message , dict) : 
             await self.ws.send_json(message)
+            if self.observer and message.get("audio"):
+                self.observer.mark("first_audio_out")
+                self.observer.log(
+                    "websocket",
+                    "audio_sent_to_client",
+                    latency_first_audio_ms=self.observer.latency_ms("first_audio_in", "first_audio_out"),
+                )
 
 
     async def __close(self):
         try:
             await self.ws.close()
+            if self.observer:
+                self.observer.log("websocket", "connection_closed")
         except:  # noqa
             pass
 
@@ -109,20 +127,57 @@ class WebsocketManager(Disposable):
 
     async def websocket_get(self):
         try :
-            if self.source == SourceEnum.device :
-                reeciever = self.ws.iter_text
-            elif self.source == SourceEnum.phone or self.source == SourceEnum.web :
-                # Both phone (raw PCM) and web (MediaRecorder WebM/Opus) send binary audio
-                reeciever = self.ws.iter_bytes
-            else :
-                raise RuntimeError("Invalid source type")
-
             chunk_count = 0
-            async for message in reeciever():
+            while not self.is_closed():
+                try:
+                    frame = await asyncio.wait_for(
+                        self.ws.receive(),
+                        timeout=self.idle_timeout_seconds,
+                    )
+                except asyncio.TimeoutError:
+                    await self.ws.close(code=1001, reason="idle_timeout")
+                    if self.observer:
+                        self.observer.log("websocket", "idle_timeout")
+                    break
+
+                message_type = frame.get("type")
+                if message_type == "websocket.disconnect":
+                    if self.observer:
+                        self.observer.log(
+                            "websocket",
+                            "client_disconnected",
+                            close_code=frame.get("code"),
+                        )
+                    break
+
+                if message_type != "websocket.receive":
+                    continue
+
+                text_data = frame.get("text")
+                bytes_data = frame.get("bytes")
+                message = bytes_data if bytes_data is not None else text_data
+                if message is None:
+                    continue
+
+                if isinstance(message, (bytes, bytearray)) and len(message) > self.max_frame_bytes:
+                    await self.ws.close(code=1009, reason="frame_too_large")
+                    if self.observer:
+                        self.observer.log("websocket", "frame_too_large", size=len(message))
+                    break
+
+                if self.source == SourceEnum.device and isinstance(message, (bytes, bytearray)):
+                    await self.ws.close(code=1003, reason="device_source_requires_text")
+                    if self.observer:
+                        self.observer.log("websocket", "invalid_payload_for_source")
+                    break
+
                 chunk_count += 1
                 if chunk_count == 1 or chunk_count % 100 == 0:
                     msg_size = len(message) if isinstance(message, (bytes, str)) else 0
                     print(f"[WS] Audio received - Chunk #{chunk_count}, Size: {msg_size} bytes")
+                if self.observer and chunk_count == 1:
+                    self.observer.mark("first_audio_in")
+                    self.observer.log("websocket", "first_chunk_received")
                 await self.dispatcher.broadcast(
                     self.guid,
                     Message(
@@ -133,6 +188,10 @@ class WebsocketManager(Disposable):
 
         except RuntimeError :
             pass
+        except Exception as e:
+            if self.observer:
+                self.observer.log("websocket", "receiver_error", error=str(e))
+            raise
 
 
     async def websocket_put(self):
@@ -291,7 +350,7 @@ class WebsocketManager(Disposable):
     async def run_async(self):
         await self.open()
         # async background tasks for handeling websocket conenctions
-        tasks = [
+        self._tasks = [
             # check for recieving events
             asyncio.create_task(self.websocket_get()),
             # check for sending events
@@ -319,16 +378,23 @@ class WebsocketManager(Disposable):
             # check for TTS audio generation complete event
             asyncio.create_task(self.websocket_put_audio_end()),
         ]
-        await asyncio.gather(*tasks)
+        done, pending = await asyncio.wait(self._tasks, return_when=asyncio.FIRST_COMPLETED)
+        for task in done:
+            if task.cancelled():
+                continue
+            exc = task.exception()
+            if exc and self.observer:
+                self.observer.log("websocket", "task_failed", error=str(exc))
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
 
     async def dispose(self):
-        # Cancel all running tasks
-        for task in asyncio.all_tasks():
-            if task is not asyncio.current_task():
-                task.cancel()
+        for task in self._tasks:
+            task.cancel()
+        with suppress(Exception):
+            await asyncio.gather(*self._tasks, return_exceptions=True)
         await self.__close()
         
-
-
 
 

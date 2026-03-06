@@ -94,7 +94,13 @@ class Dispatcher:
 
 
     async def connect(self):
+        # Recreate backend per app lifespan to avoid event-loop binding leaks in tests.
+        self._broadcast = Broadcast("memory://")
         await self._broadcast.connect()
 
     async def disconnect(self):
-        await self._broadcast.disconnect()
+        try:
+            await self._broadcast.disconnect()
+        except RuntimeError:
+            # Safe to ignore during teardown when loop affinity changes.
+            pass
