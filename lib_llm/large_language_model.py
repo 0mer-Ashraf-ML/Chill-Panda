@@ -26,6 +26,10 @@ class LargeLanguageModel:
         dispatcher: Dispatcher,
         source: str = "device",
         observer: SessionObserver | None = None,
+        user_id: str = "",
+        mongodb_manager=None,
+        language: str = "en",
+        role_value: str = "none",
     ):
         self.guid = guid
         self.llm = llm
@@ -36,7 +40,22 @@ class LargeLanguageModel:
         self.is_generating = False
         self.crisis_detector = CrisisDetector(llm.api_key)
         self.observer = observer
+        self.user_id = user_id
+        self.mongodb_manager = mongodb_manager
+        self.language = language
+        self.role_value = role_value
 
+
+    async def _save_message(self, role: str, content: str):
+        if self.mongodb_manager and content:
+            await asyncio.to_thread(
+                self.mongodb_manager.save_message,
+                session_id=self.guid,
+                user_id=self.user_id,
+                role=role,
+                content=content,
+                metadata={"language": self.language, "user_role": self.role_value, "source": "websocket"},
+            )
 
     async def _check_for_crisis(self, text: str):
         is_critical = await self.crisis_detector.detect_crisis(text)
@@ -59,6 +78,7 @@ class LargeLanguageModel:
                 self.observer.log("llm", "user_message_received", chars=len(message.content))
             # Fire and forget crisis detection to not block the main response
             asyncio.create_task(self._check_for_crisis(message.content))
+            asyncio.create_task(self._save_message("user", message.content))
             
             await self.dispatcher.broadcast(
                 self.guid,
@@ -144,6 +164,7 @@ class LargeLanguageModel:
         print(f"[LLM] Response complete - Length: {len(words)} chars")
         if self.observer:
             self.observer.log("llm", "response_complete", chars=len(words))
+        asyncio.create_task(self._save_message("assistant", words))
         # words = words.replace("```json", "").replace("```", "")
         # words = json.loads(words)
         # print("------------","LargeLanguageModel",words,"------------")

@@ -48,6 +48,7 @@ class TextToSpeechDeepgram:
         
         # Interruption tracking
         self.is_interrupted = False
+        self._suppress_audio_complete = False
         
         # TTS options
         self.options = SpeakWSOptions(
@@ -361,6 +362,16 @@ class TextToSpeechDeepgram:
             async for event in flush_event:
                 print("🔄 TTS Flush event received")
                 await self.flush_and_end()
+                if self._suppress_audio_complete:
+                    self._suppress_audio_complete = False
+                elif not self.is_interrupted:
+                    await self.dispatcher.broadcast(
+                        self.guid,
+                        Message(
+                            MessageHeader(MessageType.TTS_AUDIO_COMPLETE),
+                            data={"audio_complete": True},
+                        ),
+                    )
 
     async def handle_user_interruption(self):
         """Handle user interruption - listens for user speech"""
@@ -369,7 +380,8 @@ class TextToSpeechDeepgram:
                 print("🛑 USER SPOKE - Interrupting Deepgram TTS")
                 
                 self.is_interrupted = True
-                
+                self._suppress_audio_complete = True
+
                 async with self.buffer_lock:
                     self.word_buffer = ""
                 

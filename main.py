@@ -256,6 +256,10 @@ async def websocket_endpoint(
         dispatcher,
         source.value,
         observer=observer,
+        user_id=user_id,
+        mongodb_manager=mongodb_manager,
+        language=language_value,
+        role_value=role_value,
     )
 
     def create_tts_component():

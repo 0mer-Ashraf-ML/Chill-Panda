@@ -59,6 +59,7 @@ class TextToSpeechElevenLabs:
         
         # Interruption tracking
         self.is_interrupted = False
+        self._suppress_audio_complete = False
         
         # Audio listener task
         self.audio_listener_task = None
@@ -175,8 +176,16 @@ class TextToSpeechElevenLabs:
                         print(f"🎵 Audio chunk broadcasted")
                         
                     elif data.get('isFinal'):
-                        print("🏁 ElevenLabs audio generation complete for this segment")
-                        # DON'T break - keep listening for more audio
+                        if self._suppress_audio_complete:
+                            self._suppress_audio_complete = False
+                        elif not self.is_interrupted:
+                            await self.dispatcher.broadcast(
+                                self.guid,
+                                Message(
+                                    MessageHeader(MessageType.TTS_AUDIO_COMPLETE),
+                                    data={"audio_complete": True},
+                                ),
+                            )
                         continue
                         
                     elif data.get('error'):
@@ -398,6 +407,7 @@ class TextToSpeechElevenLabs:
                 
                 # Set interrupted flag
                 self.is_interrupted = True
+                self._suppress_audio_complete = True
                 
                 # Clear buffer
                 async with self.buffer_lock:

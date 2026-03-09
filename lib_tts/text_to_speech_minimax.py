@@ -58,6 +58,7 @@ class TextToSpeechMinimax:
         self.max_buffer_time = 2.5
         self.is_flushing = False
         self.is_interrupted = False
+        self._suppress_audio_complete = False
 
         self.audio_settings = {
             "sample_rate": 16000,
@@ -164,6 +165,7 @@ class TextToSpeechMinimax:
 
                 if event_type == "task_started":
                     self.is_task_started = True
+                    self._suppress_audio_complete = False
                     if self.task_started_event:
                         self.task_started_event.set()
                     continue
@@ -209,7 +211,7 @@ class TextToSpeechMinimax:
                     self.is_task_started = False
                     if self.task_started_event:
                         self.task_started_event.clear()
-                    if not self.is_interrupted:
+                    if not self.is_interrupted and not self._suppress_audio_complete:
                         await self.dispatcher.broadcast(
                             self.guid,
                             Message(
@@ -344,6 +346,7 @@ class TextToSpeechMinimax:
     async def _interrupt_generation(self):
         async with self.interrupt_lock:
             self.is_interrupted = True
+            self._suppress_audio_complete = True
             async with self.buffer_lock:
                 self.word_buffer = ""
 
