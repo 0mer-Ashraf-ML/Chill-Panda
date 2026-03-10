@@ -98,15 +98,27 @@ A mindful AI companion for mental wellness, featuring:
 ## Authentication
 Most endpoints require an API key passed in the `X-API-Key` header.
 
+## Language Support
+All chat and voice endpoints support the following languages via the `language` parameter:
+| Code | Language |
+|------|----------|
+| `en` | English (default) |
+| `zh-HK` | Cantonese (Traditional Chinese, Hong Kong) |
+| `zh-TW` | Mandarin (Traditional Chinese, Taiwan) |
+
+For **Chat API** (`/api/v1/chat`, `/api/v1/chat/simple`): pass `language` in the JSON request body.
+
+For **WebSocket**: pass `language` as a query parameter.
+
 ## WebSocket Connections
 Connect to `/ws/{source}` for real-time voice/text interaction:
 - **source**: `device` or `phone`
 - **user_id**: Required user identifier for voice usage tracking
-- **language**: `en`, `french`, `zh-HK`, `zh-TW` (optional query param)
+- **language**: `en`, `zh-HK`, `zh-TW` (optional query param)
 - **role**: `loyal_best_friend`, `caring_parent`, `coach`, `funny_friend` (optional query param)
 - **session_id**: UUID for session continuity (optional query param)
 
-Example: `ws://localhost:8000/ws/device?user_id=user123&language=en&role=coach&session_id=123e4567-e89b-12d3-a456-426614174000`
+Example: `ws://localhost:8000/ws/device?user_id=user123&language=zh-HK&role=coach&session_id=123e4567-e89b-12d3-a456-426614174000`
 
 ## Voice Usage Limits
 Voice (TTS) usage is tracked per user with the following limits:

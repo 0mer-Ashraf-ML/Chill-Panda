@@ -65,8 +65,13 @@ class ChatRequest(BaseModel):
 
     language: str = Field(
         default="en",
-        description="Language code for the response (en, french, zh-HK, zh-TW)",
-        examples=["en"]
+        description=(
+            "Language for the AI response. Supported values:\n"
+            "- `en` — English (default)\n"
+            "- `zh-HK` — Cantonese (Traditional Chinese, Hong Kong)\n"
+            "- `zh-TW` — Mandarin (Traditional Chinese, Taiwan)"
+        ),
+        examples=["en", "zh-HK", "zh-TW"]
     )
 
     role: Literal[

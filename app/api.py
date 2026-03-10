@@ -21,6 +21,14 @@ router = APIRouter(prefix="/api/v1")
 
 @router.post("/chat/simple", response_model=ChatResponse, tags=["Chat"])
 async def chat(req: ChatRequest):
+    """
+    Send a message and get a single AI response (non-streaming).
+
+    **Language support** — set the `language` field in the request body:
+    - `en` — English (default)
+    - `zh-HK` — Cantonese (Traditional Chinese, Hong Kong)
+    - `zh-TW` — Mandarin (Traditional Chinese, Taiwan)
+    """
     history = mongodb_manager.get_conversation_history(req.session_id, limit=10)
 
     # Build playground params dict if provided
@@ -37,7 +45,8 @@ async def chat(req: ChatRequest):
         conversation_history=history,
         custom_system_prompt=req.custom_system_prompt,
         model=req.model,
-        playground_params=playground_params
+        playground_params=playground_params,
+        language=req.language
     )
 
     mongodb_manager.save_message(
@@ -71,6 +80,14 @@ async def chat(req: ChatRequest):
 
 @router.post("/chat", tags=["Chat"])
 async def chat_stream(req: ChatRequest):
+    """
+    Send a message and receive a streaming AI response (Server-Sent Events).
+
+    **Language support** — set the `language` field in the request body:
+    - `en` — English (default)
+    - `zh-HK` — Cantonese (Traditional Chinese, Hong Kong)
+    - `zh-TW` — Mandarin (Traditional Chinese, Taiwan)
+    """
 
     async def event_generator():
         history = mongodb_manager.get_conversation_history(
@@ -105,7 +122,8 @@ async def chat_stream(req: ChatRequest):
             conversation_history=history,
             custom_system_prompt=req.custom_system_prompt,
             model=req.model,
-            playground_params=playground_params
+            playground_params=playground_params,
+            language=req.language
         ):
             full_reply += chunk
 

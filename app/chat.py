@@ -49,13 +49,14 @@ class RAGChat:
         user_message: str,
         role: str,
         conversation_history: List[Dict] = None,
-        custom_system_prompt: Optional[str] = None
+        custom_system_prompt: Optional[str] = None,
+        language: str = "en"
     ):
         # Use custom prompt if provided, otherwise generate the default
         if custom_system_prompt is not None:
             system_prompt = custom_system_prompt
         else:
-            system_prompt = generate_system_prompt(role)
+            system_prompt = generate_system_prompt(role, language)
 
         messages = [{"role": "system", "content": system_prompt}]
 
@@ -84,10 +85,11 @@ class RAGChat:
         conversation_history: List[Dict] = None,
         custom_system_prompt: Optional[str] = None,
         model: Optional[str] = None,
-        playground_params: Optional[Dict[str, Any]] = None
+        playground_params: Optional[Dict[str, Any]] = None,
+        language: str = "en"
     ) -> str:
         messages = self._build_messages(
-            user_message, role, conversation_history, custom_system_prompt
+            user_message, role, conversation_history, custom_system_prompt, language
         )
 
         print("----- Message -----")
@@ -121,10 +123,11 @@ class RAGChat:
         conversation_history: List[Dict] = None,
         custom_system_prompt: Optional[str] = None,
         model: Optional[str] = None,
-        playground_params: Optional[Dict[str, Any]] = None
+        playground_params: Optional[Dict[str, Any]] = None,
+        language: str = "en"
     ):
         messages = self._build_messages(
-            user_message, role, conversation_history, custom_system_prompt
+            user_message, role, conversation_history, custom_system_prompt, language
         )
 
         print("----- Message -----")
@@ -170,7 +173,8 @@ def generate_ai_reply(
     conversation_history=None,
     custom_system_prompt=None,
     model=None,
-    playground_params=None
+    playground_params=None,
+    language="en"
 ):
     return get_rag_chat().generate_response(
         user_message,
@@ -178,7 +182,8 @@ def generate_ai_reply(
         conversation_history,
         custom_system_prompt,
         model,
-        playground_params
+        playground_params,
+        language
     )
 
 
@@ -188,7 +193,8 @@ def generate_streaming_ai_reply(
     conversation_history=None,
     custom_system_prompt=None,
     model=None,
-    playground_params=None
+    playground_params=None,
+    language="en"
 ):
     return get_rag_chat().generate_streaming_response(
         user_message,
@@ -196,5 +202,6 @@ def generate_streaming_ai_reply(
         conversation_history,
         custom_system_prompt,
         model,
-        playground_params
+        playground_params,
+        language
     )
