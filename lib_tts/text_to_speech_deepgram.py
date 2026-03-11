@@ -90,7 +90,12 @@ class TextToSpeechDeepgram:
                     SpeakWebSocketEvents.Error,
                     self._on_error
                 )
-                
+
+                self.dg_connection.on(
+                    SpeakWebSocketEvents.Flushed,
+                    self._on_flushed
+                )
+
                 # Start connection
                 success = self.dg_connection.start(self.options)
                 
@@ -202,6 +207,28 @@ class TextToSpeechDeepgram:
         """Callback for errors"""
         error = kwargs.get('error', args[0] if args else 'Unknown error')
         print(f"❌ Deepgram TTS error: {error}")
+
+    def _on_flushed(self, *args, **kwargs):
+        """Callback when Deepgram finishes processing a flush - all audio has been sent"""
+        if self._suppress_audio_complete:
+            self._suppress_audio_complete = False
+            return
+        if self.is_interrupted:
+            return
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(
+                    self.dispatcher.broadcast(
+                        self.guid,
+                        Message(
+                            MessageHeader(MessageType.CALL_WEBSOCKET_PUT),
+                            data={"audio_is_end": True},
+                        ),
+                    )
+                )
+        except Exception as e:
+            print(f"❌ Error broadcasting audio_is_end: {e}")
 
     async def ensure_connection(self):
         """Ensure connection is ready"""
@@ -322,7 +349,6 @@ class TextToSpeechDeepgram:
             try:
                 self.dg_connection.flush()
                 print("🔚 Sent flush to Deepgram")
-                await asyncio.sleep(0.3)  # Give time for audio
             except Exception as e:
                 print(f"❌ Error flushing Deepgram: {e}")
 
@@ -357,21 +383,11 @@ class TextToSpeechDeepgram:
                         await self.send_text(words)
 
     async def handle_tts_flush(self):
-        """Handle TTS flush events"""
+        """Handle TTS flush events - audio_is_end is sent via _on_flushed callback"""
         async with await self.dispatcher.subscribe(self.guid, MessageType.TTS_FLUSH) as flush_event:
             async for event in flush_event:
                 print("🔄 TTS Flush event received")
                 await self.flush_and_end()
-                if self._suppress_audio_complete:
-                    self._suppress_audio_complete = False
-                elif not self.is_interrupted:
-                    await self.dispatcher.broadcast(
-                        self.guid,
-                        Message(
-                            MessageHeader(MessageType.TTS_AUDIO_COMPLETE),
-                            data={"audio_complete": True},
-                        ),
-                    )
 
     async def handle_user_interruption(self):
         """Handle user interruption - listens for user speech"""

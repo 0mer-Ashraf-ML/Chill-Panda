@@ -338,15 +338,6 @@ class WebsocketManager(Disposable):
 
 
 
-    async def websocket_put_audio_end(self):
-        """Handle TTS audio generation complete event"""
-        async with await self.dispatcher.subscribe(
-            self.guid, MessageType.TTS_AUDIO_COMPLETE
-        ) as subscriber:
-            async for event in subscriber:
-                audio_end_data = { "audio_is_end": True }
-                await self.send( audio_end_data )
-
     async def run_async(self):
         await self.open()
         # async background tasks for handeling websocket conenctions
@@ -375,8 +366,6 @@ class WebsocketManager(Disposable):
             asyncio.create_task(self.websocket_put_voice_limit_reached()),
             asyncio.create_task(self.websocket_put_voice_disabled()),
             asyncio.create_task(self.websocket_put_voice_warning()),
-            # check for TTS audio generation complete event
-            asyncio.create_task(self.websocket_put_audio_end()),
         ]
         done, pending = await asyncio.wait(self._tasks, return_when=asyncio.FIRST_COMPLETED)
         for task in done:

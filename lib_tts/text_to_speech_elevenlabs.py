@@ -182,8 +182,8 @@ class TextToSpeechElevenLabs:
                             await self.dispatcher.broadcast(
                                 self.guid,
                                 Message(
-                                    MessageHeader(MessageType.TTS_AUDIO_COMPLETE),
-                                    data={"audio_complete": True},
+                                    MessageHeader(MessageType.CALL_WEBSOCKET_PUT),
+                                    data={"audio_is_end": True},
                                 ),
                             )
                         continue
