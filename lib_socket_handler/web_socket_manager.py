@@ -38,7 +38,7 @@ class WebsocketManager(Disposable):
         self.observer = observer
         self._tasks: list[asyncio.Task] = []
         self.max_frame_bytes = 5 * 1024 * 1024
-        self.idle_timeout_seconds = 90
+        self.idle_timeout_seconds = 300
 
     async def open(self):
         await self.ws.accept()
