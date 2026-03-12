@@ -433,13 +433,6 @@ class TextToSpeechMinimax:
         except Exception as e:
             if self.observer:
                 self.observer.log("tts", "fatal_error", error=str(e))
-            await self.dispatcher.broadcast(
-                self.guid,
-                Message(
-                    MessageHeader(MessageType.VOICE_DISABLED),
-                    data={"reason": "tts_runtime_error"},
-                ),
-            )
             raise
         finally:
             await self.close_connection()
