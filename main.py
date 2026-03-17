@@ -1,7 +1,7 @@
 # external imports
 import os , uuid , asyncio
 from dotenv import load_dotenv
-from api_request_schemas import (SourceEnum , LanguageEnum, RoleEnum)
+from api_request_schemas import (SourceEnum , LanguageEnum, RoleEnum, GenderEnum)
 from fastapi import FastAPI, WebSocket , Request, Query, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -190,6 +190,7 @@ async def websocket_endpoint(
     source: SourceEnum,
     language: LanguageEnum | None = None,
     role: RoleEnum | None = None,
+    gender: GenderEnum | None = None,
     session_id: str | None = None,
     user_id: str = Query(..., description="Required user identifier for usage tracking")
 ):
@@ -274,12 +275,35 @@ async def websocket_endpoint(
         role_value=role_value,
     )
 
+    gender_value = gender.value if gender else "female"
+
+    _VOICE_MAP = {
+        ("en",    "male"):   ("elevenlabs", "G0yjIg3xY8gEJZkHpjVm"),
+        ("en",    "female"): ("elevenlabs", "hGQkZQUA5RiOXIw7P9iO"),
+        ("zh-TW", "male"):   ("minimax",    "Chinese (Mandarin)_Gentle_Youth"),
+        ("zh-TW", "female"): ("minimax",    "Chinese (Mandarin)_Gentle_Senior"),
+        ("zh-HK", "male"):   ("minimax",    "Cantonese_ProfessionalHost\uff08M)"),
+        ("zh-HK", "female"): ("minimax",    "Cantonese_GentleLady"),
+    }
+    _provider, _voice_id = _VOICE_MAP.get(
+        (language_value, gender_value),
+        ("minimax", "English_expressive_narrator"),
+    )
+
     def create_tts_component():
+        if _provider == "elevenlabs":
+            return TextToSpeechElevenLabs(
+                guid,
+                dispatcher,
+                ELEVENLABS_API_KEY,
+                voice_id=_voice_id,
+                voice_tracker=voice_tracker,
+            )
         return TextToSpeechMinimax(
             guid,
             dispatcher,
             MINIMAX_API_KEY,
-            voice_id=language_value,
+            voice_id=_voice_id,
             voice_tracker=voice_tracker,
             observer=observer,
         )

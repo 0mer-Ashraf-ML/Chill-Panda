@@ -428,7 +428,8 @@ h1 {
 }
 
 #language-select,
-#role-select {
+#role-select,
+#gender-select {
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid #47aca9;
   border-radius: 6px;
@@ -443,7 +444,8 @@ h1 {
 }
 
 #language-select:focus,
-#role-select:focus {
+#role-select:focus,
+#gender-select:focus {
   border-color: #13ef95;
   box-shadow: 0 0 10px rgba(19, 239, 149, 0.2);
 }

@@ -30,13 +30,6 @@ class TextToSpeechMinimax:
         self.voice_tracker = voice_tracker
         self.observer = observer
 
-        if voice_id == "zh-HK":
-            voice_id = "cantonese_audio_ad39f71a-efe2-4881-858e-09b1c1b39ce4"
-        elif voice_id == "zh-TW":
-            voice_id = "hunyin_6"
-        else:
-            voice_id = "English_expressive_narrator"
-
         self.voice_id = voice_id
         self.model = model
         self.uri = "wss://api.minimax.io/ws/v1/t2a_v2"
