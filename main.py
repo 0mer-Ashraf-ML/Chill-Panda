@@ -3,6 +3,7 @@ import os , uuid , asyncio
 from dotenv import load_dotenv
 from api_request_schemas import (SourceEnum , LanguageEnum, RoleEnum, GenderEnum)
 from fastapi import FastAPI, WebSocket , Request, Query, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 # internal imports
@@ -25,7 +26,7 @@ from app.voice_management_api import management_router
 from lib_database.database import Database
 from lib_voice_usage.voice_usage_tracker import VoiceUsageTracker, VoiceUsageInterceptor
 from lib_database.voice_usage_repository import create_voice_usage_indexes
-from app.config import VOICE_USAGE_ENABLED
+from app.config import VOICE_USAGE_ENABLED, CORS_ORIGINS
 
 # loading .env configs
 load_dotenv()
@@ -139,6 +140,13 @@ When a limit is reached, voice responses are disabled but text chat continues.
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.mount("/public", StaticFiles(directory="public"), name="static")
 templates = Jinja2Templates(directory="templates")
