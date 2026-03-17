@@ -195,6 +195,11 @@ class SessionInfo(BaseModel):
         description="Total number of messages in this session",
         examples=[42]
     )
+    title: Optional[str] = Field(
+        default=None,
+        description="Session title derived from the last user message (up to 100 chars)",
+        examples=["I've been feeling really anxious lately..."]
+    )
 
 
 class ConversationHistory(BaseModel):

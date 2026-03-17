@@ -57,14 +57,15 @@ class MongoDBManager:
                 "timestamp": datetime.utcnow(),
                 "metadata": metadata or {}
             }
-            
+
             result = self.chats_collection.insert_one(message)
-            
-            # Update session activity
-            self.update_session_activity(session_id, user_id)
-            
+
+            # Update session activity, storing user messages as the session title
+            title = content[:100] if role == "user" and content else None
+            self.update_session_activity(session_id, user_id, title=title)
+
             return str(result.inserted_id)
-            
+
         except Exception as e:
             return ""
     
@@ -82,18 +83,22 @@ class MongoDBManager:
         except Exception as e:
             return []
     
-    def update_session_activity(self, session_id: str, user_id: str):
+    def update_session_activity(self, session_id: str, user_id: str, title: str = None):
         """Update or create session record"""
         try:
             self._ensure_connection()
+            set_fields = {
+                "user_id": user_id,
+                "last_activity": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            }
+            if title is not None:
+                set_fields["title"] = title
+
             self.sessions_collection.update_one(
                 {"session_id": session_id},
                 {
-                    "$set": {
-                        "user_id": user_id,
-                        "last_activity": datetime.utcnow(),
-                        "updated_at": datetime.utcnow()
-                    },
+                    "$set": set_fields,
                     "$setOnInsert": {
                         "created_at": datetime.utcnow(),
                         "message_count": 0
@@ -116,7 +121,7 @@ class MongoDBManager:
             self._ensure_connection()
             sessions = list(self.sessions_collection.find(
                 {"user_id": user_id},
-                {"_id": 0, "session_id": 1, "user_id": 1, "created_at": 1, "last_activity": 1, "message_count": 1}
+                {"_id": 0, "session_id": 1, "user_id": 1, "created_at": 1, "last_activity": 1, "message_count": 1, "title": 1}
             ).sort("last_activity", -1).limit(limit))
             
             return sessions
