@@ -1,5 +1,6 @@
 # external imports
-import os , uuid , asyncio
+import os , uuid , asyncio , logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 from dotenv import load_dotenv
 from api_request_schemas import (SourceEnum , LanguageEnum, RoleEnum, GenderEnum)
 from fastapi import FastAPI, WebSocket , Request, Query, HTTPException

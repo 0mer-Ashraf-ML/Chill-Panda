@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/v1")
 # ==============================
 
 @router.post("/chat/simple", response_model=ChatResponse, tags=["Chat"])
-async def chat(req: ChatRequest):
+def chat(req: ChatRequest):
     """
     Send a message and get a single AI response (non-streaming).
 
@@ -95,7 +95,8 @@ async def chat_stream(req: ChatRequest):
             limit=10
         )
 
-        mongodb_manager.save_message(
+        await asyncio.to_thread(
+            mongodb_manager.save_message,
             session_id=req.session_id,
             user_id=req.user_id,
             role="user",
@@ -136,7 +137,8 @@ async def chat_stream(req: ChatRequest):
             yield f"data: {json.dumps(data)}\n\n"
             await asyncio.sleep(0)
 
-        ai_msg_id = mongodb_manager.save_message(
+        ai_msg_id = await asyncio.to_thread(
+            mongodb_manager.save_message,
             session_id=req.session_id,
             user_id=req.user_id,
             role="assistant",

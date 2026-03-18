@@ -1,10 +1,13 @@
 import os
+import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 from bson import ObjectId
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -64,9 +67,11 @@ class MongoDBManager:
             title = content[:100] if role == "user" and content else None
             self.update_session_activity(session_id, user_id, title=title)
 
+            logger.info("[MongoDB] saved %s message | session=%s user=%s id=%s", role, session_id[:8], user_id, result.inserted_id)
             return str(result.inserted_id)
 
         except Exception as e:
+            logger.error("[MongoDB] save_message failed | session=%s user=%s role=%s error=%s: %s", session_id[:8], user_id, role, type(e).__name__, e)
             return ""
     
     def get_conversation_history(self, session_id: str, limit: int = 20) -> List[Dict]:
@@ -114,7 +119,7 @@ class MongoDBManager:
             )
             
         except Exception as e:
-            pass
+            logger.error("[MongoDB] update_session_activity failed | session=%s error=%s: %s", session_id[:8], type(e).__name__, e)
     def get_user_sessions(self, user_id: str, limit: int = 10) -> List[Dict]:
         """Get all sessions for a user"""
         try:
