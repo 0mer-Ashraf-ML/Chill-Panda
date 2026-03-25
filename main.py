@@ -287,7 +287,7 @@ async def websocket_endpoint(
     gender_value = gender.value if gender else "female"
 
     _VOICE_MAP = {
-        ("en",    "male"):   ("elevenlabs", "G0yjIg3xY8gEJZkHpjVm"),
+        ("en",    "male"):   ("elevenlabs", "nPczCjzI2devNBz1zQrb"),
         ("en",    "female"): ("elevenlabs", "hGQkZQUA5RiOXIw7P9iO"),
         ("zh-TW", "male"):   ("minimax",    "Chinese (Mandarin)_Gentle_Youth"),
         ("zh-TW", "female"): ("minimax",    "Chinese (Mandarin)_Gentle_Senior"),
