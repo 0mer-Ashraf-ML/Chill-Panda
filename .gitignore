@@ -17,3 +17,7 @@ test.py/
 main.log
 test_*.py
 received_audio/*
+.claude/*
+.DS_STORE
+CLAUDE.md
+*.wav

@@ -165,6 +165,15 @@ class LargeLanguageModel:
         if self.observer:
             self.observer.log("llm", "response_complete", chars=len(words))
         asyncio.create_task(self._save_message("assistant", words))
+        await self.dispatcher.broadcast(
+            self.guid,
+            Message(
+                MessageHeader(
+                    MessageType.LLM_GENERATED_TEXT
+                ),
+                data={"words": None, "is_audio_required": False, "is_end": True},
+            ),
+        )
         # words = words.replace("```json", "").replace("```", "")
         # words = json.loads(words)
         # print("------------","LargeLanguageModel",words,"------------")

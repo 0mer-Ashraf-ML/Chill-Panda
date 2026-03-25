@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import websockets
+from websockets.exceptions import ConnectionClosed
 from lib_infrastructure.dispatcher import (
     Dispatcher,
     Message,
@@ -52,6 +53,8 @@ class TextToSpeechMinimax:
         self.is_flushing = False
         self.is_interrupted = False
         self._suppress_audio_complete = False
+        self._awaiting_audio_end = False
+        self._reply_active = False
 
         self.audio_settings = {
             "sample_rate": 16000,
@@ -204,14 +207,13 @@ class TextToSpeechMinimax:
                     self.is_task_started = False
                     if self.task_started_event:
                         self.task_started_event.clear()
-                    if not self.is_interrupted and not self._suppress_audio_complete:
-                        await self.dispatcher.broadcast(
-                            self.guid,
-                            Message(
-                                MessageHeader(MessageType.CALL_WEBSOCKET_PUT),
-                                data={"audio_is_end": True},
-                            ),
-                        )
+                    if self._suppress_audio_complete:
+                        self._suppress_audio_complete = False
+                        self._awaiting_audio_end = False
+                        self._reply_active = False
+                        continue
+                    if self._awaiting_audio_end and not self.is_interrupted:
+                        await self._broadcast_audio_end()
             except asyncio.TimeoutError:
                 if self.websocket and self.is_connected:
                     try:
@@ -219,7 +221,7 @@ class TextToSpeechMinimax:
                     except Exception:
                         self.is_connected = False
                 continue
-            except websockets.exceptions.ConnectionClosed:
+            except ConnectionClosed:
                 self.is_connected = False
                 self.is_task_started = False
                 if self.observer:
@@ -319,11 +321,26 @@ class TextToSpeechMinimax:
 
         return bool(re.search(r"[.!?]\s*$", text.strip()))
 
+    async def _broadcast_audio_end(self):
+        self._awaiting_audio_end = False
+        self._reply_active = False
+        await self.dispatcher.broadcast(
+            self.guid,
+            Message(
+                MessageHeader(MessageType.CALL_WEBSOCKET_PUT),
+                data={"audio_is_end": True},
+            ),
+        )
+
     async def flush_and_end(self):
         async with self.buffer_lock:
             if self.word_buffer.strip() and not self.is_interrupted:
                 await self._flush_buffer_internal("final")
 
+        if not self._reply_active:
+            return
+
+        self._awaiting_audio_end = True
         if self.is_connected and self.websocket and self.is_task_started:
             try:
                 await asyncio.wait_for(
@@ -335,11 +352,22 @@ class TextToSpeechMinimax:
             except Exception as e:
                 if self.observer:
                     self.observer.log("tts", "task_finish_error", error=str(e))
+                await self._broadcast_audio_end()
+        else:
+            await self._broadcast_audio_end()
 
-    async def _interrupt_generation(self):
+    async def _interrupt_generation(self, send_clear_event: bool = True):
         async with self.interrupt_lock:
+            has_active_reply = self._reply_active or bool(self.word_buffer.strip()) or (
+                self.is_connected and self.is_task_started
+            )
+            if not has_active_reply:
+                return
+
             self.is_interrupted = True
             self._suppress_audio_complete = True
+            self._awaiting_audio_end = False
+            self._reply_active = False
             async with self.buffer_lock:
                 self.word_buffer = ""
 
@@ -359,13 +387,14 @@ class TextToSpeechMinimax:
                     if self.observer:
                         self.observer.log("tts", "interrupt_error", error=str(e))
 
-            await self.dispatcher.broadcast(
-                self.guid,
-                Message(
-                    MessageHeader(MessageType.CLEAR_EXISTING_BUFFER),
-                    data={"source": "tts_interrupt"},
-                ),
-            )
+            if send_clear_event:
+                await self.dispatcher.broadcast(
+                    self.guid,
+                    Message(
+                        MessageHeader(MessageType.CLEAR_EXISTING_BUFFER),
+                        data={"source": "tts_interrupt"},
+                    ),
+                )
 
     async def close_connection(self):
         if self.audio_listener_task:
@@ -397,6 +426,9 @@ class TextToSpeechMinimax:
                     continue
 
                 self.is_interrupted = False
+                self._suppress_audio_complete = False
+                self._reply_active = True
+                self._awaiting_audio_end = False
                 if self.use_smart_buffering:
                     await self.add_word_to_buffer(words)
                 else:
@@ -410,7 +442,7 @@ class TextToSpeechMinimax:
     async def handle_user_interruption(self):
         async with await self.dispatcher.subscribe(self.guid, MessageType.FINAL_TRANSCRIPTION_CREATED) as subscriber:
             async for _event in subscriber:
-                await self._interrupt_generation()
+                await self._interrupt_generation(send_clear_event=False)
 
     async def run_async(self):
         await self.connect_websocket()

@@ -400,6 +400,16 @@ window.addEventListener("load", () => {
       return;
     }
 
+    if ('is_critical' in event_parsed) {
+      console.log('[CRISIS]', event_parsed.is_critical);
+      return;
+    }
+
+    if (event_parsed.audio_is_end) {
+      console.log('[AUDIO_END]');
+      return;
+    }
+
     if (event_parsed.is_text == true) {
       console.log("---> Text", { event_parsed })
       let msg = event_parsed.msg

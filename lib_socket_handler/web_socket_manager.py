@@ -37,6 +37,7 @@ class WebsocketManager(Disposable):
         self.voice_tracker = voice_tracker
         self.observer = observer
         self._tasks: list[asyncio.Task] = []
+        self._send_lock = asyncio.Lock()
         self.max_frame_bytes = 5 * 1024 * 1024
         self.idle_timeout_seconds = 300
 
@@ -60,7 +61,8 @@ class WebsocketManager(Disposable):
         # send json data object to twillio websocket 
         # await self.ws.send_bytes(message)
         if isinstance(message , dict) : 
-            await self.ws.send_json(message)
+            async with self._send_lock:
+                await self.ws.send_json(message)
             if self.observer and message.get("audio"):
                 self.observer.mark("first_audio_out")
                 self.observer.log(
@@ -225,7 +227,14 @@ class WebsocketManager(Disposable):
         ) as subscriber:
             async for event in subscriber:
                 stream_data = event.message.data
+                if stream_data.get("is_end"):
+                    llm_msg_data = { "is_text" : True , "is_clear_event" : False ,  "is_transcription" : False , "is_end" : True,  "msg" : None }
+                    await self.send( llm_msg_data )
+                    continue
+
                 llm_msg = stream_data.get('words')
+                if llm_msg is None:
+                    continue
                 llm_msg_data = { "is_text" : True , "is_clear_event" : False ,  "is_transcription" : False , "is_end" : False  , "msg" : llm_msg }
                 await self.send( llm_msg_data )
 
@@ -348,8 +357,6 @@ class WebsocketManager(Disposable):
             asyncio.create_task(self.websocket_put()),
             # check for sending events for user messages being captured
             asyncio.create_task(self.websocket_put_user_transcription()),
-            # check for sending llm finish event
-            asyncio.create_task(self.websocket_put_llm_new_responce()),
             # check for sending events for LLM responces being captured
             asyncio.create_task(self.websocket_put_llm_responce()),
             # check for sending events for LLM structured data being captured
@@ -385,5 +392,4 @@ class WebsocketManager(Disposable):
             await asyncio.gather(*self._tasks, return_exceptions=True)
         await self.__close()
         
-
 
