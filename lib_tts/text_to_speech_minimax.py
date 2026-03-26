@@ -55,6 +55,9 @@ class TextToSpeechMinimax:
         self._suppress_audio_complete = False
         self._awaiting_audio_end = False
         self._reply_active = False
+        self._audio_end_sent = False
+        self._last_audio_monotonic = None
+        self._audio_end_fallback_task = None
 
         self.audio_settings = {
             "sample_rate": 16000,
@@ -177,6 +180,7 @@ class TextToSpeechMinimax:
 
                 audio_hex = response.get("data", {}).get("audio")
                 if audio_hex:
+                    self._last_audio_monotonic = asyncio.get_running_loop().time()
                     audio_bytes = bytes.fromhex(audio_hex)
                     base64_audio = base64.b64encode(audio_bytes).decode("utf-8")
 
@@ -322,8 +326,16 @@ class TextToSpeechMinimax:
         return bool(re.search(r"[.!?]\s*$", text.strip()))
 
     async def _broadcast_audio_end(self):
+        if self._audio_end_sent:
+            return
+
+        self._audio_end_sent = True
         self._awaiting_audio_end = False
         self._reply_active = False
+        if self._audio_end_fallback_task:
+            self._audio_end_fallback_task.cancel()
+            self._audio_end_fallback_task = None
+        print("🔔 Broadcasting audio_is_end")
         await self.dispatcher.broadcast(
             self.guid,
             Message(
@@ -331,6 +343,29 @@ class TextToSpeechMinimax:
                 data={"audio_is_end": True},
             ),
         )
+
+    def _schedule_audio_end_fallback(self, *, idle_wait: float = 0.8, max_wait: float = 4.0):
+        if self._audio_end_fallback_task and not self._audio_end_fallback_task.done():
+            self._audio_end_fallback_task.cancel()
+
+        async def _runner():
+            started = asyncio.get_running_loop().time()
+            try:
+                while self._awaiting_audio_end and not self.is_interrupted and not self._audio_end_sent:
+                    now = asyncio.get_running_loop().time()
+                    if self._last_audio_monotonic is not None and (now - self._last_audio_monotonic) >= idle_wait:
+                        print("⏱️ audio_is_end fallback triggered from idle timeout")
+                        await self._broadcast_audio_end()
+                        return
+                    if (now - started) >= max_wait:
+                        print("⏱️ audio_is_end fallback triggered from hard timeout")
+                        await self._broadcast_audio_end()
+                        return
+                    await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                return
+
+        self._audio_end_fallback_task = asyncio.create_task(_runner())
 
     async def flush_and_end(self):
         async with self.buffer_lock:
@@ -341,6 +376,7 @@ class TextToSpeechMinimax:
             return
 
         self._awaiting_audio_end = True
+        self._schedule_audio_end_fallback()
         if self.is_connected and self.websocket and self.is_task_started:
             try:
                 await asyncio.wait_for(
@@ -368,12 +404,17 @@ class TextToSpeechMinimax:
             self._suppress_audio_complete = True
             self._awaiting_audio_end = False
             self._reply_active = False
+            self._audio_end_sent = False
+            self._last_audio_monotonic = None
             async with self.buffer_lock:
                 self.word_buffer = ""
 
             if self.buffer_timer:
                 self.buffer_timer.cancel()
                 self.buffer_timer = None
+            if self._audio_end_fallback_task:
+                self._audio_end_fallback_task.cancel()
+                self._audio_end_fallback_task = None
 
             if self.is_connected and self.websocket and self.is_task_started:
                 try:
@@ -429,6 +470,11 @@ class TextToSpeechMinimax:
                 self._suppress_audio_complete = False
                 self._reply_active = True
                 self._awaiting_audio_end = False
+                self._audio_end_sent = False
+                self._last_audio_monotonic = None
+                if self._audio_end_fallback_task:
+                    self._audio_end_fallback_task.cancel()
+                    self._audio_end_fallback_task = None
                 if self.use_smart_buffering:
                     await self.add_word_to_buffer(words)
                 else:

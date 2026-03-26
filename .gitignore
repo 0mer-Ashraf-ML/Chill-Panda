@@ -20,4 +20,5 @@ received_audio/*
 .claude/*
 .DS_STORE
 CLAUDE.md
+scripts/*
 *.wav
