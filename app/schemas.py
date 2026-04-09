@@ -137,6 +137,10 @@ class ChatResponse(BaseModel):
         default=False,
         description="Whether RAG (Retrieval Augmented Generation) was used for the response"
     )
+    is_critical: bool = Field(
+        default=False,
+        description="Whether the latest user message was classified as crisis/self-harm risk"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -145,7 +149,8 @@ class ChatResponse(BaseModel):
                     "reply": "Hello friend! I sense you're feeling a bit anxious. Let's practice the Turtle Breath together. Breathe in slowly for 4 counts, hold for 4, and exhale for 6. Remember, you are the Sky - thoughts are just passing clouds. 🐼",
                     "session_id": "123e4567-e89b-12d3-a456-426614174000",
                     "message_id": "65a1b2c3d4e5f6g7h8i9j0k1",
-                    "used_rag": True
+                    "used_rag": True,
+                    "is_critical": False
                 }
             ]
         }

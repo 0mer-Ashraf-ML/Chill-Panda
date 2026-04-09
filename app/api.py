@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+import os
 from .schemas import (
     ChatRequest, ChatResponse, ConversationHistory, SessionInfo,
     DeleteResponse, ErrorResponse
@@ -12,15 +13,17 @@ from .vision_service import analyze_image_with_gpt4_vision
 from .biometric_service import detect_stress
 from datetime import datetime
 from typing import List
+from lib_llm.helpers.crisis_detector import CrisisDetector
 
 router = APIRouter(prefix="/api/v1")
+crisis_detector = CrisisDetector(os.getenv("OPENAI_API_KEY", ""))
 
 # ==============================
 # EXISTING CHATBOT APIS (UNCHANGED)
 # ==============================
 
 @router.post("/chat/simple", response_model=ChatResponse, tags=["Chat"])
-def chat(req: ChatRequest):
+async def chat(req: ChatRequest):
     """
     Send a message and get a single AI response (non-streaming).
 
@@ -29,6 +32,8 @@ def chat(req: ChatRequest):
     - `zh-HK` — Cantonese (Traditional Chinese, Hong Kong)
     - `zh-TW` — Mandarin (Traditional Chinese, Taiwan)
     """
+    is_critical = await crisis_detector.detect_crisis(req.input_text)
+
     history = mongodb_manager.get_conversation_history(req.session_id, limit=10)
 
     # Build playground params dict if provided
@@ -74,7 +79,8 @@ def chat(req: ChatRequest):
     return ChatResponse(
         reply=ai_reply,
         session_id=req.session_id,
-        message_id=ai_msg_id
+        message_id=ai_msg_id,
+        is_critical=is_critical,
     )
 
 
@@ -90,6 +96,7 @@ async def chat_stream(req: ChatRequest):
     """
 
     async def event_generator():
+        is_critical = await crisis_detector.detect_crisis(req.input_text)
         history = mongodb_manager.get_conversation_history(
             req.session_id,
             limit=10
@@ -152,7 +159,8 @@ async def chat_stream(req: ChatRequest):
         end_data = {
             "message_id": ai_msg_id,
             "session_id": req.session_id,
-            "is_end": True
+            "is_end": True,
+            "is_critical": is_critical,
         }
 
         yield f"data: {json.dumps(end_data)}\n\n"
