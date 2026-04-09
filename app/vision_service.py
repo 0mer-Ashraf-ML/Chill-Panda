@@ -1,10 +1,9 @@
 import base64
 import json
-from openai import OpenAI
-from .config import OPENAI_API_KEY
+from .llm_provider import create_sync_llm_client
 from .recommendation_service import get_stress_recommendations
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = create_sync_llm_client()
 
 VISION_PROMPT = """
 You are a mental health emotion detection assistant.

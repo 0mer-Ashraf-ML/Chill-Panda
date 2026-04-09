@@ -14,9 +14,10 @@ from .biometric_service import detect_stress
 from datetime import datetime
 from typing import List
 from lib_llm.helpers.crisis_detector import CrisisDetector
+from .config import LLM_API_KEY
 
 router = APIRouter(prefix="/api/v1")
-crisis_detector = CrisisDetector(os.getenv("OPENAI_API_KEY", ""))
+crisis_detector = CrisisDetector(LLM_API_KEY or "")
 
 # ==============================
 # EXISTING CHATBOT APIS (UNCHANGED)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from enum import Enum
-from openai import AsyncOpenAI 
+from app.llm_provider import create_async_llm_client
 
 class LLM:
     # GPT Models
@@ -14,7 +14,13 @@ class LLM:
         "4++" : "gpt-4-0125-preview",
         "35++" : "gpt-3.5-turbo-0125",
         "4o-mini" : "gpt-4o-mini",
-        "4o" : "gpt-4o"
+        "4o" : "gpt-4o",
+        "kimi-k2.5": "moonshotai/kimi-k2.5",
+        "claude-haiku-4.5": "anthropic/claude-haiku-4.5",
+        "claude-sonnet-4.6": "anthropic/claude-sonnet-4.6",
+        "glm-5": "z-ai/glm-5",
+        "gemini-3-flash": "google/gemini-3-flash-preview",
+        "google/gemini-3-flash": "google/gemini-3-flash-preview",
     }
 
     class Role(Enum):
@@ -36,9 +42,9 @@ class LLM:
     def __init__(self, guid , prompt_generator, api_key , model="4o-mini", custom_functions=None):
         self.api_key = api_key
         self.guid = guid
-        self.client = AsyncOpenAI( api_key=self.api_key )
+        self.client = create_async_llm_client(self.api_key)
         self.prompt_generator = prompt_generator
-        self.model = LLM.models[model]
+        self.model = LLM.models.get(model, model)
         self.custom_functions = custom_functions or custom_functions
         self.function_responses = []
         

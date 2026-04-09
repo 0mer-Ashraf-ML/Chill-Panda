@@ -1,10 +1,10 @@
 import json
-from openai import AsyncOpenAI
 from typing import Optional
+from app.llm_provider import create_async_llm_client
 
 class CrisisDetector:
     def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = create_async_llm_client(api_key)
         self.model = model
 
     async def detect_crisis(self, text: str) -> bool:

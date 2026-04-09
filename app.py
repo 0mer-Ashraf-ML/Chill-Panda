@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import uuid
 import json
+from app.model_config import SUPPORTED_MODELS, DEFAULT_MODEL
 
 # -------------------------------
 # Config
@@ -76,35 +77,15 @@ INTERACTION FLOW:
 **Max 200 tokens. Conversational. No fluff.**
 """
 
-# Available models - organized by family (February 2026)
 AVAILABLE_MODELS = {
-    # GPT-4o Family
-    "gpt-4o": "GPT-4o",
-    "gpt-4o-mini": "GPT-4o Mini (Cost-effective)",
-    # GPT-4.1 Family
-    "gpt-4.1": "GPT-4.1 (1M context)",
-    "gpt-4.1-mini": "GPT-4.1 Mini (1M context)",
-    "gpt-4.1-nano": "GPT-4.1 Nano (Fast)",
-    # GPT-5 Family
-    "gpt-5": "GPT-5",
-    "gpt-5-mini": "GPT-5 Mini (Cost-effective)",
-    # GPT-5.1 Family
-    "gpt-5.1": "GPT-5.1 (Recommended)",
-    # GPT-5.2 Family (Latest)
-    "gpt-5.2": "GPT-5.2 (Best Overall)",
-    "gpt-5.2-pro": "GPT-5.2 Pro (Highest Quality)",
+    model_id: config.display_name for model_id, config in SUPPORTED_MODELS.items()
 }
 
-# Models that support reasoning effort (GPT-5 family)
 REASONING_MODELS = {
-    "gpt-5": ("none", "minimal", "low", "medium", "high"),
-    "gpt-5-mini": ("none", "low", "medium", "high"),
-    "gpt-5.1": ("none", "low", "medium", "high"),
-    "gpt-5.2": ("none", "low", "medium", "high", "xhigh"),
-    "gpt-5.2-pro": ("medium", "high", "xhigh"),
+    model_id: config.reasoning_effort_levels
+    for model_id, config in SUPPORTED_MODELS.items()
+    if config.supports_reasoning_effort
 }
-
-DEFAULT_MODEL = "gpt-4.1-nano"
 
 st.set_page_config(
     page_title="Chill Panda Chat",
@@ -191,7 +172,7 @@ with st.sidebar:
             "Model:",
             model_labels,
             index=current_index,
-            help="Choose which OpenAI model to use"
+            help="Choose which model to use"
         )
 
         st.session_state.selected_model = model_options[

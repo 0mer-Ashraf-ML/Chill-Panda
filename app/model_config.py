@@ -7,7 +7,7 @@ This module handles:
 - Parameter validation per model
 - Dynamic parameter construction
 
-Based on OpenAI documentation (February 2026)
+Primarily OpenAI-compatible chat models, including OpenRouter-routed models.
 """
 
 from typing import Dict, Any, Optional
@@ -33,8 +33,18 @@ class ModelConfig:
     reasoning_effort_levels: tuple = field(default_factory=tuple)
 
 
-# Currently supported OpenAI chat models (February 2026)
-# Organized by family for clarity
+MODEL_ID_ALIASES: Dict[str, str] = {
+    "google/gemini-3-flash": "google/gemini-3-flash-preview",
+}
+
+
+def resolve_model_id(model_id: str) -> str:
+    """Map user-facing aliases to the actual API model id."""
+    return MODEL_ID_ALIASES.get(model_id, model_id)
+
+
+# Currently supported chat models
+# Organized by family/provider for clarity
 SUPPORTED_MODELS: Dict[str, ModelConfig] = {
     # ==================
     # GPT-4o Family
@@ -130,6 +140,40 @@ SUPPORTED_MODELS: Dict[str, ModelConfig] = {
         supports_reasoning_effort=True,
         reasoning_effort_levels=("medium", "high", "xhigh"),
     ),
+
+    # ==================
+    # OpenRouter Additional Models
+    # ==================
+    "moonshotai/kimi-k2.5": ModelConfig(
+        id="moonshotai/kimi-k2.5",
+        display_name="Kimi K2.5",
+        context_window=128000,
+        max_output_tokens=32768,
+    ),
+    "anthropic/claude-haiku-4.5": ModelConfig(
+        id="anthropic/claude-haiku-4.5",
+        display_name="Claude Haiku 4.5",
+        context_window=200000,
+        max_output_tokens=16384,
+    ),
+    "anthropic/claude-sonnet-4.6": ModelConfig(
+        id="anthropic/claude-sonnet-4.6",
+        display_name="Claude Sonnet 4.6",
+        context_window=200000,
+        max_output_tokens=16384,
+    ),
+    "z-ai/glm-5": ModelConfig(
+        id="z-ai/glm-5",
+        display_name="GLM-5",
+        context_window=128000,
+        max_output_tokens=32768,
+    ),
+    "google/gemini-3-flash-preview": ModelConfig(
+        id="google/gemini-3-flash-preview",
+        display_name="Gemini 3 Flash",
+        context_window=128000,
+        max_output_tokens=32768,
+    ),
 }
 
 # Default model if none specified
@@ -138,7 +182,7 @@ DEFAULT_MODEL = "gpt-4.1-nano"
 
 def get_model_config(model_id: str) -> Optional[ModelConfig]:
     """Get configuration for a specific model."""
-    return SUPPORTED_MODELS.get(model_id)
+    return SUPPORTED_MODELS.get(resolve_model_id(model_id))
 
 
 def get_model_list() -> list[tuple[str, str]]:
@@ -188,7 +232,7 @@ def build_api_params(
 
     # Start with required parameters
     params: Dict[str, Any] = {
-        "model": model_id,
+        "model": resolve_model_id(model_id),
         "messages": messages,
         "stream": stream,
     }

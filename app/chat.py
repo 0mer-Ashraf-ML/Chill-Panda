@@ -1,23 +1,23 @@
 import os
 from typing import List, Dict, Optional, Any
-from openai import OpenAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from .pinecone_setup import get_pinecone_index
 from .prompt_generator import generate_system_prompt
 from .model_config import build_api_params, DEFAULT_MODEL, is_reasoning_model
+from .llm_provider import create_sync_llm_client, get_embedding_client_kwargs
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = create_sync_llm_client()
 
 
 class RAGChat:
     def __init__(self):
         self.embeddings = OpenAIEmbeddings(
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-            model=os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
+            model=os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002"),
+            **get_embedding_client_kwargs()
         )
         self.index = get_pinecone_index()
         self.vectorstore = PineconeVectorStore(

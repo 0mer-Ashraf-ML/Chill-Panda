@@ -27,13 +27,12 @@ from app.voice_management_api import management_router
 from lib_database.database import Database
 from lib_voice_usage.voice_usage_tracker import VoiceUsageTracker, VoiceUsageInterceptor
 from lib_database.voice_usage_repository import create_voice_usage_indexes
-from app.config import VOICE_USAGE_ENABLED, CORS_ORIGINS
+from app.config import VOICE_USAGE_ENABLED, CORS_ORIGINS, LLM_API_KEY
 
 # loading .env configs
 load_dotenv()
 PORT = int(os.getenv("PORT"))
 OUTPUT_MP3_FILES = "output.mp3"
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
@@ -173,7 +172,7 @@ async def get(request: Request):
 async def chat_invoke(websocket: WebSocket):
     guid = str(uuid.uuid4())
     prompt_generator = PromptGenerator()
-    modelInstance = LLM(guid , prompt_generator, OPENAI_API_KEY)
+    modelInstance = LLM(guid , prompt_generator, LLM_API_KEY)
 
     await websocket.accept()
     try:
@@ -225,7 +224,7 @@ async def websocket_endpoint(
     )
 
     prompt_generator = PromptGenerator(language or LanguageEnum.english, role)
-    modelInstance = LLM(guid, prompt_generator, OPENAI_API_KEY)
+    modelInstance = LLM(guid, prompt_generator, LLM_API_KEY)
 
     voice_tracker = None
     voice_interceptor = None
