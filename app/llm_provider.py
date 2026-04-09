@@ -1,8 +1,11 @@
 import os
 from typing import Any, Optional
 
+from dotenv import load_dotenv
 from openai import AsyncOpenAI, OpenAI
 
+
+load_dotenv()
 
 OPENROUTER_BASE_URL_DEFAULT = "https://openrouter.ai/api/v1"
 
