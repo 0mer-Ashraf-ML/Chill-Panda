@@ -78,6 +78,24 @@ def get_embedding_client_kwargs(explicit_api_key: Optional[str] = None) -> dict[
     return kwargs
 
 
+def apply_openrouter_request_overrides(params: dict[str, Any]) -> dict[str, Any]:
+    """
+    Keep OpenRouter requests fast and non-reasoning by default.
+
+    OpenRouter normalizes this setting for providers that support reasoning.
+    """
+    if not is_openrouter_enabled():
+        return params
+
+    updated = dict(params)
+    extra_body = dict(updated.get("extra_body") or {})
+    reasoning = dict(extra_body.get("reasoning") or {})
+    reasoning["effort"] = "none"
+    extra_body["reasoning"] = reasoning
+    updated["extra_body"] = extra_body
+    return updated
+
+
 def create_sync_llm_client(explicit_api_key: Optional[str] = None) -> OpenAI:
     return OpenAI(**get_openai_client_kwargs(explicit_api_key))
 

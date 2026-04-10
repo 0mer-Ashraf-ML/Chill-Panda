@@ -35,6 +35,8 @@ class ModelConfig:
 
 MODEL_ID_ALIASES: Dict[str, str] = {
     "google/gemini-3-flash": "google/gemini-3-flash-preview",
+    "gemini-3-flash": "google/gemini-3-flash-preview",
+    "glm-5": "z-ai/glm-5.1",
 }
 
 
@@ -158,14 +160,32 @@ SUPPORTED_MODELS: Dict[str, ModelConfig] = {
     ),
     "anthropic/claude-sonnet-4.6": ModelConfig(
         id="anthropic/claude-sonnet-4.6",
-        display_name="Claude Sonnet 4.6",
+        display_name="Claude Sonnet 4.6 (Expensive!)",
         context_window=200000,
         max_output_tokens=16384,
     ),
-    "z-ai/glm-5": ModelConfig(
-        id="z-ai/glm-5",
-        display_name="GLM-5",
+    "z-ai/glm-5.1": ModelConfig(
+        id="z-ai/glm-5.1",
+        display_name="GLM-5.1",
         context_window=128000,
+        max_output_tokens=32768,
+    ),
+    "qwen/qwen3.6-plus": ModelConfig(
+        id="qwen/qwen3.6-plus",
+        display_name="Qwen 3.6 Plus",
+        context_window=1000000,
+        max_output_tokens=32768,
+    ),
+    "deepseek/deepseek-v3.2": ModelConfig(
+        id="deepseek/deepseek-v3.2",
+        display_name="DeepSeek V3.2",
+        context_window=163840,
+        max_output_tokens=32768,
+    ),
+    "minimax/minimax-m2.7": ModelConfig(
+        id="minimax/minimax-m2.7",
+        display_name="MiniMax M2.7",
+        context_window=204800,
         max_output_tokens=32768,
     ),
     "google/gemini-3-flash-preview": ModelConfig(
@@ -173,6 +193,12 @@ SUPPORTED_MODELS: Dict[str, ModelConfig] = {
         display_name="Gemini 3 Flash",
         context_window=128000,
         max_output_tokens=32768,
+    ),
+    "openai/gpt-5.4": ModelConfig(
+        id="openai/gpt-5.4",
+        display_name="GPT-5.4",
+        context_window=1050000,
+        max_output_tokens=128000,
     ),
 }
 

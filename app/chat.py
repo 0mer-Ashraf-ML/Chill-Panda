@@ -5,7 +5,11 @@ from langchain_pinecone import PineconeVectorStore
 from .pinecone_setup import get_pinecone_index
 from .prompt_generator import generate_system_prompt
 from .model_config import build_api_params, DEFAULT_MODEL, is_reasoning_model
-from .llm_provider import create_sync_llm_client, get_embedding_client_kwargs
+from .llm_provider import (
+    apply_openrouter_request_overrides,
+    create_sync_llm_client,
+    get_embedding_client_kwargs,
+)
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -111,6 +115,7 @@ class RAGChat:
             reasoning_effort=params.get("reasoning_effort"),
             stream=False
         )
+        api_params = apply_openrouter_request_overrides(api_params)
 
         response = client.chat.completions.create(**api_params)
 
@@ -149,6 +154,7 @@ class RAGChat:
             reasoning_effort=params.get("reasoning_effort"),
             stream=True
         )
+        api_params = apply_openrouter_request_overrides(api_params)
 
         stream = client.chat.completions.create(**api_params)
 
