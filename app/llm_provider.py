@@ -87,6 +87,10 @@ def apply_openrouter_request_overrides(params: dict[str, Any]) -> dict[str, Any]
     if not is_openrouter_enabled():
         return params
 
+    model = str(params.get("model") or "")
+    if model.startswith("minimax/"):
+        return params
+
     updated = dict(params)
     extra_body = dict(updated.get("extra_body") or {})
     reasoning = dict(extra_body.get("reasoning") or {})
