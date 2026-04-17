@@ -1,22 +1,35 @@
 import json
 import asyncio
+import contextlib
 from functools import partial
 from lib_llm.helpers.llm import LLM
 from deepgram import ( DeepgramClient, LiveTranscriptionEvents, LiveOptions, DeepgramClientOptions )
 from lib_infrastructure.dispatcher import ( Dispatcher, Message, MessageHeader, MessageType )
+from lib_infrastructure.helpers.realtime_observability import SessionObserver
 
 
 class SpeechToTextDeepgram :
-    def __init__(self, guid, dispatcher: Dispatcher, socket_conext, api_key, language="en", source="phone") -> None:
+    def __init__(
+        self,
+        guid,
+        dispatcher: Dispatcher,
+        socket_conext,
+        api_key,
+        language="en",
+        source="phone",
+        observer: SessionObserver | None = None,
+    ) -> None:
         self.guid = guid
         self.dispatcher = dispatcher
         self.api_key = api_key
         self.socket_context = socket_conext
         self.language = language
         self.source = source
+        self.observer = observer
         self.deepgram_config = DeepgramClientOptions(options={"keepalive": "true"})
         self.deepgram = DeepgramClient(api_key=self.api_key, config=self.deepgram_config)
         self.dg_connection = self.deepgram.listen.live.v("1")
+        self._loop = None
 
         # Configure Deepgram based on source type
         if source == "phone":
@@ -70,6 +83,13 @@ class SpeechToTextDeepgram :
             sentence = json.loads(text)
             sentence = sentence.get("transcibed_text" , None)
             if sentence is not None:
+                if self.observer:
+                    self.observer.mark("first_transcript_out")
+                    self.observer.log(
+                        "stt",
+                        "transcript_from_text_payload",
+                        latency_first_transcript_ms=self.observer.latency_ms("first_audio_in", "first_transcript_out"),
+                    )
                 await self.dispatcher.broadcast(
                     self.guid,
                     Message(
@@ -92,6 +112,7 @@ class SpeechToTextDeepgram :
 
 
     async def run_async(self) :
+        self._loop = asyncio.get_running_loop()
         # Callback for onMessage deepgram event
         def on_message_deepgram(self , result, **kwargs):
             object_instance = kwargs.get("object_instance")
@@ -103,16 +124,26 @@ class SpeechToTextDeepgram :
 
             if result.speech_final or result.is_final :
                 print(f"[STT] Transcription complete: \"{sentence[:50]}{'...' if len(sentence) > 50 else ''}\"")
+                if object_instance.observer:
+                    object_instance.observer.mark("first_transcript_out")
+                    object_instance.observer.log(
+                        "stt",
+                        "transcript_final",
+                        latency_first_transcript_ms=object_instance.observer.latency_ms("first_audio_in", "first_transcript_out"),
+                    )
 
-                asyncio.run(
+                future = asyncio.run_coroutine_threadsafe(
                     object_instance.dispatcher.broadcast(
                         object_instance.guid,
                         Message(
                             MessageHeader(MessageType.FINAL_TRANSCRIPTION_CREATED),
                             data=LLM.LLMMessage(role=LLM.Role.USER, content=sentence)
                         ),
-                    )
-                )            
+                    ),
+                    object_instance._loop,
+                )
+                with contextlib.suppress(Exception):
+                    future.result(timeout=2)
 
         # Callback for onError deepgram event
         def on_error_deepgram(self, error , **kwargs):
@@ -135,6 +166,8 @@ class SpeechToTextDeepgram :
 
         self.dg_connection.start(self.deepgram_options)
         print(f"[STT] Deepgram connection started - Language: {self.language}")
+        if self.observer:
+            self.observer.log("stt", "deepgram_connected", language=self.language)
 
         try:
             chunk_count = 0
@@ -147,19 +180,26 @@ class SpeechToTextDeepgram :
                         chunk_count += 1
                         if chunk_count == 1:
                             print(f"[STT] First audio chunk sent to Deepgram")
+                            if self.observer:
+                                self.observer.mark("first_audio_in")
+                                self.observer.log("stt", "first_audio_chunk_forwarded")
                         self.transcribe(audio_chunk)
                     elif isinstance(audio_chunk, str):
                         await self.handle_transcibed_text(audio_chunk)
 
 
 
-        except asyncio.CancelledError: print("Error")        
-        except Exception as e : self.dispose( "exception_block" )
+        except asyncio.CancelledError:
+            if self.observer:
+                self.observer.log("stt", "cancelled")
+        except Exception as e:
+            if self.observer:
+                self.observer.log("stt", "error", error=str(e))
+            self.dispose( "exception_block" )
+            raise
         finally: self.dispose( "finally_block" )
 
     def dispose(self , func_name):
         try : self.dg_connection.finish()
         except Exception as error: print( f"Error_Message > {error}" )
-
-
 

@@ -1,10 +1,13 @@
 import os
+import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 from bson import ObjectId
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -14,7 +17,10 @@ class MongoDBManager:
         self.db = None
         self.chats_collection = None
         self.sessions_collection = None
-        self.connect()
+    
+    def _ensure_connection(self):
+        if self.client is None:
+            self.connect()
     
     def connect(self):
         """Connect to MongoDB"""
@@ -45,6 +51,7 @@ class MongoDBManager:
     def save_message(self, session_id: str, user_id: str, role: str, content: str, metadata: Dict = None) -> str:
         """Save a single message to chat history"""
         try:
+            self._ensure_connection()
             message = {
                 "session_id": session_id,
                 "user_id": user_id,
@@ -53,20 +60,24 @@ class MongoDBManager:
                 "timestamp": datetime.utcnow(),
                 "metadata": metadata or {}
             }
-            
+
             result = self.chats_collection.insert_one(message)
-            
-            # Update session activity
-            self.update_session_activity(session_id, user_id)
-            
+
+            # Update session activity, storing user messages as the session title
+            title = content[:100] if role == "user" and content else None
+            self.update_session_activity(session_id, user_id, title=title)
+
+            logger.info("[MongoDB] saved %s message | session=%s user=%s id=%s", role, session_id[:8], user_id, result.inserted_id)
             return str(result.inserted_id)
-            
+
         except Exception as e:
+            logger.error("[MongoDB] save_message failed | session=%s user=%s role=%s error=%s: %s", session_id[:8], user_id, role, type(e).__name__, e)
             return ""
     
     def get_conversation_history(self, session_id: str, limit: int = 20) -> List[Dict]:
         """Get conversation history for a session"""
         try:
+            self._ensure_connection()
             messages = list(self.chats_collection.find(
                 {"session_id": session_id},
                 {"_id": 0, "role": 1, "content": 1, "timestamp": 1}
@@ -77,17 +88,22 @@ class MongoDBManager:
         except Exception as e:
             return []
     
-    def update_session_activity(self, session_id: str, user_id: str):
+    def update_session_activity(self, session_id: str, user_id: str, title: str = None):
         """Update or create session record"""
         try:
+            self._ensure_connection()
+            set_fields = {
+                "user_id": user_id,
+                "last_activity": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            }
+            if title is not None:
+                set_fields["title"] = title
+
             self.sessions_collection.update_one(
                 {"session_id": session_id},
                 {
-                    "$set": {
-                        "user_id": user_id,
-                        "last_activity": datetime.utcnow(),
-                        "updated_at": datetime.utcnow()
-                    },
+                    "$set": set_fields,
                     "$setOnInsert": {
                         "created_at": datetime.utcnow(),
                         "message_count": 0
@@ -103,13 +119,14 @@ class MongoDBManager:
             )
             
         except Exception as e:
-            pass
+            logger.error("[MongoDB] update_session_activity failed | session=%s error=%s: %s", session_id[:8], type(e).__name__, e)
     def get_user_sessions(self, user_id: str, limit: int = 10) -> List[Dict]:
         """Get all sessions for a user"""
         try:
+            self._ensure_connection()
             sessions = list(self.sessions_collection.find(
                 {"user_id": user_id},
-                {"_id": 0, "session_id": 1, "user_id": 1, "created_at": 1, "last_activity": 1, "message_count": 1}
+                {"_id": 0, "session_id": 1, "user_id": 1, "created_at": 1, "last_activity": 1, "message_count": 1, "title": 1}
             ).sort("last_activity", -1).limit(limit))
             
             return sessions
@@ -120,6 +137,7 @@ class MongoDBManager:
     def delete_session(self, session_id: str) -> bool:
         """Delete a session and all its messages"""
         try:
+            self._ensure_connection()
             # Delete all messages in the session
             self.chats_collection.delete_many({"session_id": session_id})
             
@@ -137,6 +155,7 @@ class MongoDBManager:
         Returns a list of dicts with "text" key.
         """
         try:
+            self._ensure_connection()
             collection = self.db.get_collection("pdf_knowledge")  # create this collection in MongoDB
             results = list(
                 collection.find(

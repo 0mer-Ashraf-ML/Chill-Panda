@@ -44,3 +44,11 @@ class RoleEnum(str, Enum):
     caring_parent = "caring_parent"
     coach = "coach"
     funny_friend = "funny_friend"
+
+
+class GenderEnum(str, Enum):
+    """
+    Voice gender selection.
+    """
+    male = "male"
+    female = "female"

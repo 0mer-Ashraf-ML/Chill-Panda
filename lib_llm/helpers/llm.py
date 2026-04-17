@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from enum import Enum
-from openai import AsyncOpenAI 
+from app.llm_provider import apply_openrouter_request_overrides, create_async_llm_client
 
 class LLM:
     # GPT Models
@@ -14,7 +14,22 @@ class LLM:
         "4++" : "gpt-4-0125-preview",
         "35++" : "gpt-3.5-turbo-0125",
         "4o-mini" : "gpt-4o-mini",
-        "4o" : "gpt-4o"
+        "4o" : "gpt-4o",
+        "kimi-k2.5": "moonshotai/kimi-k2.5",
+        "claude-haiku-4.5": "anthropic/claude-haiku-4.5",
+        "claude-sonnet-4.6": "anthropic/claude-sonnet-4.6",
+        "glm-5": "z-ai/glm-5.1",
+        "glm-5.1": "z-ai/glm-5.1",
+        "qwen3.6-plus": "qwen/qwen3.6-plus",
+        "qwen/qwen3.6-plus": "qwen/qwen3.6-plus",
+        "deepseek-v3.2": "deepseek/deepseek-v3.2",
+        "deepseek/deepseek-v3.2": "deepseek/deepseek-v3.2",
+        "minimax-m2.7": "minimax/minimax-m2.7",
+        "minimax/minimax-m2.7": "minimax/minimax-m2.7",
+        "gemini-3-flash": "google/gemini-3-flash-preview",
+        "google/gemini-3-flash": "google/gemini-3-flash-preview",
+        "gpt-5.4": "openai/gpt-5.4",
+        "openai/gpt-5.4": "openai/gpt-5.4",
     }
 
     class Role(Enum):
@@ -36,9 +51,9 @@ class LLM:
     def __init__(self, guid , prompt_generator, api_key , model="4o-mini", custom_functions=None):
         self.api_key = api_key
         self.guid = guid
-        self.client = AsyncOpenAI( api_key=self.api_key )
+        self.client = create_async_llm_client(self.api_key)
         self.prompt_generator = prompt_generator
-        self.model = LLM.models[model]
+        self.model = LLM.models.get(model, model)
         self.custom_functions = custom_functions or custom_functions
         self.function_responses = []
         
@@ -71,12 +86,14 @@ class LLM:
         words = []
 
         stream = await self.client.chat.completions.create(
-            model=self.model,
-            messages=self.messages,
-            stream=True,
-            tools=self.custom_functions,
-            function_call="auto",
-            temperature=0.3
+            **apply_openrouter_request_overrides({
+                "model": self.model,
+                "messages": self.messages,
+                "stream": True,
+                "tools": self.custom_functions,
+                "function_call": "auto",
+                "temperature": 0.3,
+            })
         )
 
         function_name = None
@@ -113,13 +130,15 @@ class LLM:
             self.add_message(message)
 
         stream = await self.client.chat.completions.create(
-            model=self.model,
-            messages=self.messages,
-            stream=True,
-            tools=self.tools,
-            tool_choice="auto",
-            temperature=0.3,
-            # response_format={ "type": "json_object" }
+            **apply_openrouter_request_overrides({
+                "model": self.model,
+                "messages": self.messages,
+                "stream": True,
+                "tools": self.tools,
+                "tool_choice": "auto",
+                "temperature": 0.3,
+                # response_format={ "type": "json_object" }
+            })
         )
 
         words = []
@@ -216,10 +235,12 @@ class LLM:
         
         # Get the model's response to the tool outputs
         completion = await self.client.chat.completions.create(
-            model=self.model,
-            messages=self.messages,
-            tools=self.tools,
-            temperature=0.3
+            **apply_openrouter_request_overrides({
+                "model": self.model,
+                "messages": self.messages,
+                "tools": self.tools,
+                "temperature": 0.3,
+            })
         )
         
         return completion

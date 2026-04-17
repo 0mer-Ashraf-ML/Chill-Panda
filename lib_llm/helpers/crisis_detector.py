@@ -1,10 +1,10 @@
 import json
-from openai import AsyncOpenAI
 from typing import Optional
+from app.llm_provider import apply_openrouter_request_overrides, create_async_llm_client
 
 class CrisisDetector:
     def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = create_async_llm_client(api_key)
         self.model = model
 
     async def detect_crisis(self, text: str) -> bool:
@@ -25,13 +25,15 @@ class CrisisDetector:
 
         try:
             response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": text},
-                ],
-                temperature=0,
-                max_tokens=5,
+                **apply_openrouter_request_overrides({
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": text},
+                    ],
+                    "temperature": 0,
+                    "max_tokens": 5,
+                })
             )
             
             result = response.choices[0].message.content.strip().lower()

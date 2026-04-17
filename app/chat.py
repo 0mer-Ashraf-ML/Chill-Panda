@@ -1,22 +1,27 @@
 import os
-from typing import List, Dict
-from openai import OpenAI
+from typing import List, Dict, Optional, Any
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from .pinecone_setup import get_pinecone_index
 from .prompt_generator import generate_system_prompt
+from .model_config import build_api_params, DEFAULT_MODEL, is_reasoning_model
+from .llm_provider import (
+    apply_openrouter_request_overrides,
+    create_sync_llm_client,
+    get_embedding_client_kwargs,
+)
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = create_sync_llm_client()
 
 
 class RAGChat:
     def __init__(self):
         self.embeddings = OpenAIEmbeddings(
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-            model=os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
+            model=os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002"),
+            **get_embedding_client_kwargs()
         )
         self.index = get_pinecone_index()
         self.vectorstore = PineconeVectorStore(
@@ -47,10 +52,15 @@ class RAGChat:
         self,
         user_message: str,
         role: str,
-        conversation_history: List[Dict] = None
+        conversation_history: List[Dict] = None,
+        custom_system_prompt: Optional[str] = None,
+        language: str = "en"
     ):
-        # Generate full system prompt with role + base
-        system_prompt = generate_system_prompt(role)
+        # Use custom prompt if provided, otherwise generate the default
+        if custom_system_prompt is not None:
+            system_prompt = custom_system_prompt
+        else:
+            system_prompt = generate_system_prompt(role, language)
 
         messages = [{"role": "system", "content": system_prompt}]
 
@@ -76,22 +86,38 @@ class RAGChat:
         self,
         user_message: str,
         role: str,
-        conversation_history: List[Dict] = None
+        conversation_history: List[Dict] = None,
+        custom_system_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        playground_params: Optional[Dict[str, Any]] = None,
+        language: str = "en"
     ) -> str:
-        messages = self._build_messages(user_message, role, conversation_history)
+        messages = self._build_messages(
+            user_message, role, conversation_history, custom_system_prompt, language
+        )
 
         print("----- Message -----")
         print(messages)
         print("----- END -----")
 
-        response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
+        # Determine model to use
+        selected_model = model or os.getenv("OPENAI_MODEL", DEFAULT_MODEL)
+
+        # Build parameters with defaults, allowing playground overrides
+        params = playground_params or {}
+        api_params = build_api_params(
+            model_id=selected_model,
             messages=messages,
-            temperature=0.7,  # Increase from 0.2 for more natural variation
-            max_tokens=200,
-            presence_penalty=0.3,  # ADD: Reduces repetition
-            frequency_penalty=0.3  # ADD: Encourages variety
+            temperature=params.get("temperature", 0.7),
+            max_tokens=params.get("max_tokens", 200),
+            presence_penalty=params.get("presence_penalty", 0.3),
+            frequency_penalty=params.get("frequency_penalty", 0.3),
+            reasoning_effort=params.get("reasoning_effort"),
+            stream=False
         )
+        api_params = apply_openrouter_request_overrides(api_params)
+
+        response = client.chat.completions.create(**api_params)
 
         return response.choices[0].message.content.strip()
 
@@ -99,34 +125,89 @@ class RAGChat:
         self,
         user_message: str,
         role: str,
-        conversation_history: List[Dict] = None
+        conversation_history: List[Dict] = None,
+        custom_system_prompt: Optional[str] = None,
+        model: Optional[str] = None,
+        playground_params: Optional[Dict[str, Any]] = None,
+        language: str = "en"
     ):
-        messages = self._build_messages(user_message, role, conversation_history)
+        messages = self._build_messages(
+            user_message, role, conversation_history, custom_system_prompt, language
+        )
 
         print("----- Message -----")
         print(messages)
         print("----- END -----")
 
-        stream = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4.1-nano"),
+        # Determine model to use
+        selected_model = model or os.getenv("OPENAI_MODEL", DEFAULT_MODEL)
+
+        # Build parameters with defaults, allowing playground overrides
+        params = playground_params or {}
+        api_params = build_api_params(
+            model_id=selected_model,
             messages=messages,
-            temperature=0.2,
-            max_tokens=300,
+            temperature=params.get("temperature", 0.2),
+            max_tokens=params.get("max_tokens", 300),
+            presence_penalty=params.get("presence_penalty"),
+            frequency_penalty=params.get("frequency_penalty"),
+            reasoning_effort=params.get("reasoning_effort"),
             stream=True
         )
+        api_params = apply_openrouter_request_overrides(api_params)
+
+        stream = client.chat.completions.create(**api_params)
 
         for chunk in stream:
             if chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
 
 
-# Singleton
-rag_chat = RAGChat()
+_rag_chat: Optional[RAGChat] = None
 
 
-def generate_ai_reply(user_message, role, conversation_history=None):
-    return rag_chat.generate_response(user_message, role, conversation_history)
+def get_rag_chat() -> RAGChat:
+    global _rag_chat
+    if _rag_chat is None:
+        _rag_chat = RAGChat()
+    return _rag_chat
 
 
-def generate_streaming_ai_reply(user_message, role, conversation_history=None):
-    return rag_chat.generate_streaming_response(user_message, role, conversation_history)
+def generate_ai_reply(
+    user_message,
+    role,
+    conversation_history=None,
+    custom_system_prompt=None,
+    model=None,
+    playground_params=None,
+    language="en"
+):
+    return get_rag_chat().generate_response(
+        user_message,
+        role,
+        conversation_history,
+        custom_system_prompt,
+        model,
+        playground_params,
+        language
+    )
+
+
+def generate_streaming_ai_reply(
+    user_message,
+    role,
+    conversation_history=None,
+    custom_system_prompt=None,
+    model=None,
+    playground_params=None,
+    language="en"
+):
+    return get_rag_chat().generate_streaming_response(
+        user_message,
+        role,
+        conversation_history,
+        custom_system_prompt,
+        model,
+        playground_params,
+        language
+    )

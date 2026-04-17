@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+import os
 from .schemas import (
     ChatRequest, ChatResponse, ConversationHistory, SessionInfo,
     DeleteResponse, ErrorResponse
@@ -12,8 +13,11 @@ from .vision_service import analyze_image_with_gpt4_vision
 from .biometric_service import detect_stress
 from datetime import datetime
 from typing import List
+from lib_llm.helpers.crisis_detector import CrisisDetector
+from .config import LLM_API_KEY
 
 router = APIRouter(prefix="/api/v1")
+crisis_detector = CrisisDetector(LLM_API_KEY or "")
 
 # ==============================
 # EXISTING CHATBOT APIS (UNCHANGED)
@@ -21,20 +25,34 @@ router = APIRouter(prefix="/api/v1")
 
 @router.post("/chat/simple", response_model=ChatResponse, tags=["Chat"])
 async def chat(req: ChatRequest):
+    """
+    Send a message and get a single AI response (non-streaming).
+
+    **Language support** — set the `language` field in the request body:
+    - `en` — English (default)
+    - `zh-HK` — Cantonese (Traditional Chinese, Hong Kong)
+    - `zh-TW` — Mandarin (Traditional Chinese, Taiwan)
+    """
+    is_critical = await crisis_detector.detect_crisis(req.input_text)
+
     history = mongodb_manager.get_conversation_history(req.session_id, limit=10)
 
-    # print("----- User Message ------")
-    # print(req.input_text)
-    # print("----- END -----")
-    # print("----- Conversation History -----")
-    # print(history)
-    # print("----- END -----")
+    # Build playground params dict if provided
+    playground_params = None
+    if req.playground_params:
+        playground_params = {
+            k: v for k, v in req.playground_params.model_dump().items()
+            if v is not None
+        }
 
     ai_reply = generate_ai_reply(
         user_message=req.input_text,
-        # language=req.language,
         role=req.role,
-        conversation_history=history
+        conversation_history=history,
+        custom_system_prompt=req.custom_system_prompt,
+        model=req.model,
+        playground_params=playground_params,
+        language=req.language
     )
 
     mongodb_manager.save_message(
@@ -62,20 +80,31 @@ async def chat(req: ChatRequest):
     return ChatResponse(
         reply=ai_reply,
         session_id=req.session_id,
-        message_id=ai_msg_id
+        message_id=ai_msg_id,
+        is_critical=is_critical,
     )
 
 
 @router.post("/chat", tags=["Chat"])
 async def chat_stream(req: ChatRequest):
+    """
+    Send a message and receive a streaming AI response (Server-Sent Events).
+
+    **Language support** — set the `language` field in the request body:
+    - `en` — English (default)
+    - `zh-HK` — Cantonese (Traditional Chinese, Hong Kong)
+    - `zh-TW` — Mandarin (Traditional Chinese, Taiwan)
+    """
 
     async def event_generator():
+        is_critical = await crisis_detector.detect_crisis(req.input_text)
         history = mongodb_manager.get_conversation_history(
             req.session_id,
             limit=10
         )
 
-        mongodb_manager.save_message(
+        await asyncio.to_thread(
+            mongodb_manager.save_message,
             session_id=req.session_id,
             user_id=req.user_id,
             role="user",
@@ -86,20 +115,24 @@ async def chat_stream(req: ChatRequest):
             }
         )
 
-        # print("----- User Message ------")
-        # print(req.input_text)
-        # print("----- END -----")
-        # print("----- Conversation History -----")
-        # print(history)
-        # print("----- END -----")
+        # Build playground params dict if provided
+        playground_params = None
+        if req.playground_params:
+            playground_params = {
+                k: v for k, v in req.playground_params.model_dump().items()
+                if v is not None
+            }
 
         full_reply = ""
 
         for chunk in generate_streaming_ai_reply(
             user_message=req.input_text,
             role=req.role,
-            # language=req.language,
-            conversation_history=history
+            conversation_history=history,
+            custom_system_prompt=req.custom_system_prompt,
+            model=req.model,
+            playground_params=playground_params,
+            language=req.language
         ):
             full_reply += chunk
 
@@ -112,7 +145,8 @@ async def chat_stream(req: ChatRequest):
             yield f"data: {json.dumps(data)}\n\n"
             await asyncio.sleep(0)
 
-        ai_msg_id = mongodb_manager.save_message(
+        ai_msg_id = await asyncio.to_thread(
+            mongodb_manager.save_message,
             session_id=req.session_id,
             user_id=req.user_id,
             role="assistant",
@@ -126,7 +160,8 @@ async def chat_stream(req: ChatRequest):
         end_data = {
             "message_id": ai_msg_id,
             "session_id": req.session_id,
-            "is_end": True
+            "is_end": True,
+            "is_critical": is_critical,
         }
 
         yield f"data: {json.dumps(end_data)}\n\n"

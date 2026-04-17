@@ -6,6 +6,7 @@ from lib_llm.helpers.tools import *
 import asyncio
 from lib_infrastructure.dispatcher import (Dispatcher, MessageType, Message, MessageHeader)
 from lib_llm.helpers.crisis_detector import CrisisDetector
+from lib_infrastructure.helpers.realtime_observability import SessionObserver
 
 
 tools = [
@@ -18,7 +19,18 @@ tool_implementations = {
 }
 
 class LargeLanguageModel:
-    def __init__(self, guid, llm: LLM, dispatcher: Dispatcher, source: str = "device"):
+    def __init__(
+        self,
+        guid,
+        llm: LLM,
+        dispatcher: Dispatcher,
+        source: str = "device",
+        observer: SessionObserver | None = None,
+        user_id: str = "",
+        mongodb_manager=None,
+        language: str = "en",
+        role_value: str = "none",
+    ):
         self.guid = guid
         self.llm = llm
         self.dispatcher = dispatcher
@@ -27,7 +39,23 @@ class LargeLanguageModel:
         self.is_audio_required = True
         self.is_generating = False
         self.crisis_detector = CrisisDetector(llm.api_key)
+        self.observer = observer
+        self.user_id = user_id
+        self.mongodb_manager = mongodb_manager
+        self.language = language
+        self.role_value = role_value
 
+
+    async def _save_message(self, role: str, content: str):
+        if self.mongodb_manager and content:
+            await asyncio.to_thread(
+                self.mongodb_manager.save_message,
+                session_id=self.guid,
+                user_id=self.user_id,
+                role=role,
+                content=content,
+                metadata={"language": self.language, "user_role": self.role_value, "source": "websocket"},
+            )
 
     async def _check_for_crisis(self, text: str):
         is_critical = await self.crisis_detector.detect_crisis(text)
@@ -46,8 +74,11 @@ class LargeLanguageModel:
         if message.role == LLM.Role.USER:
             self.is_generating = True
             print(f"[LLM] Processing user message: \"{message.content[:50]}{'...' if len(message.content) > 50 else ''}\"")
+            if self.observer:
+                self.observer.log("llm", "user_message_received", chars=len(message.content))
             # Fire and forget crisis detection to not block the main response
             asyncio.create_task(self._check_for_crisis(message.content))
+            asyncio.create_task(self._save_message("user", message.content))
             
             await self.dispatcher.broadcast(
                 self.guid,
@@ -110,6 +141,13 @@ class LargeLanguageModel:
             else:
                 words = words.lower()
                 llm_words.append(words)
+                if self.observer and len(llm_words) == 1:
+                    self.observer.mark("first_llm_token_out")
+                    self.observer.log(
+                        "llm",
+                        "first_token_out",
+                        latency_first_token_ms=self.observer.latency_ms("first_transcript_out", "first_llm_token_out"),
+                    )
                 # words = words.replace("{", "").replace("}", "").replace("response", "").replace("is_critical", "").replace("true", "").replace("false", "")
                 await self.dispatcher.broadcast(
                     self.guid,
@@ -124,6 +162,18 @@ class LargeLanguageModel:
         self.is_generating = False
         words = "".join(llm_words)
         print(f"[LLM] Response complete - Length: {len(words)} chars")
+        if self.observer:
+            self.observer.log("llm", "response_complete", chars=len(words))
+        asyncio.create_task(self._save_message("assistant", words))
+        await self.dispatcher.broadcast(
+            self.guid,
+            Message(
+                MessageHeader(
+                    MessageType.LLM_GENERATED_TEXT
+                ),
+                data={"words": None, "is_audio_required": False, "is_end": True},
+            ),
+        )
         # words = words.replace("```json", "").replace("```", "")
         # words = json.loads(words)
         # print("------------","LargeLanguageModel",words,"------------")
@@ -154,3 +204,5 @@ class LargeLanguageModel:
                 )
                 if call_ended_message is not None:
                     break
+        if self.observer:
+            self.observer.log("llm", "stopped")

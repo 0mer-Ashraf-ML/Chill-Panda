@@ -2,9 +2,10 @@ import os
 import PyPDF2
 from typing import List, Dict, Any
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from pinecone_setup import get_pinecone_index
+from app.llm_provider import get_embedding_client_kwargs
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,8 +13,8 @@ load_dotenv()
 class DocumentProcessor:
     def __init__(self):
         self.embeddings = OpenAIEmbeddings(
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-            model=os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
+            model=os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002"),
+            **get_embedding_client_kwargs()
         )
         self.index = get_pinecone_index()
         

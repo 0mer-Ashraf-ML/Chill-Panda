@@ -1,9 +1,10 @@
 # external imports
-import os , uuid , asyncio
+import os , uuid , asyncio , logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 from dotenv import load_dotenv
-from api_request_schemas import (SourceEnum , LanguageEnum, RoleEnum)
+from api_request_schemas import (SourceEnum , LanguageEnum, RoleEnum, GenderEnum)
 from fastapi import FastAPI, WebSocket , Request, Query, HTTPException
-from fastapi.websockets import WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 # internal imports
@@ -17,6 +18,7 @@ from lib_tts.text_to_speech_elevenlabs import TextToSpeechElevenLabs
 from lib_tts.text_to_speech_minimax import TextToSpeechMinimax
 from lib_infrastructure.dispatcher import ( Dispatcher , Message , MessageHeader , MessageType )
 from lib_infrastructure.helpers.global_event_logger import GlobalLoggerAsync
+from lib_infrastructure.helpers.realtime_observability import SessionObserver
 from contextlib import asynccontextmanager
 from app.api import router
 from app.mongodb_manager import mongodb_manager
@@ -25,13 +27,12 @@ from app.voice_management_api import management_router
 from lib_database.database import Database
 from lib_voice_usage.voice_usage_tracker import VoiceUsageTracker, VoiceUsageInterceptor
 from lib_database.voice_usage_repository import create_voice_usage_indexes
-from app.config import VOICE_USAGE_ENABLED
+from app.config import VOICE_USAGE_ENABLED, CORS_ORIGINS, LLM_API_KEY
 
 # loading .env configs
 load_dotenv()
 PORT = int(os.getenv("PORT"))
 OUTPUT_MP3_FILES = "output.mp3"
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
@@ -98,15 +99,27 @@ A mindful AI companion for mental wellness, featuring:
 ## Authentication
 Most endpoints require an API key passed in the `X-API-Key` header.
 
+## Language Support
+All chat and voice endpoints support the following languages via the `language` parameter:
+| Code | Language |
+|------|----------|
+| `en` | English (default) |
+| `zh-HK` | Cantonese (Traditional Chinese, Hong Kong) |
+| `zh-TW` | Mandarin (Traditional Chinese, Taiwan) |
+
+For **Chat API** (`/api/v1/chat`, `/api/v1/chat/simple`): pass `language` in the JSON request body.
+
+For **WebSocket**: pass `language` as a query parameter.
+
 ## WebSocket Connections
 Connect to `/ws/{source}` for real-time voice/text interaction:
 - **source**: `device` or `phone`
 - **user_id**: Required user identifier for voice usage tracking
-- **language**: `en`, `french`, `zh-HK`, `zh-TW` (optional query param)
+- **language**: `en`, `zh-HK`, `zh-TW` (optional query param)
 - **role**: `loyal_best_friend`, `caring_parent`, `coach`, `funny_friend` (optional query param)
 - **session_id**: UUID for session continuity (optional query param)
 
-Example: `ws://localhost:8000/ws/device?user_id=user123&language=en&role=coach&session_id=123e4567-e89b-12d3-a456-426614174000`
+Example: `ws://localhost:8000/ws/device?user_id=user123&language=zh-HK&role=coach&session_id=123e4567-e89b-12d3-a456-426614174000`
 
 ## Voice Usage Limits
 Voice (TTS) usage is tracked per user with the following limits:
@@ -127,6 +140,13 @@ When a limit is reached, voice responses are disabled but text chat continues.
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.mount("/public", StaticFiles(directory="public"), name="static")
 templates = Jinja2Templates(directory="templates")
@@ -152,7 +172,7 @@ async def get(request: Request):
 async def chat_invoke(websocket: WebSocket):
     guid = str(uuid.uuid4())
     prompt_generator = PromptGenerator()
-    modelInstance = LLM(guid , prompt_generator, OPENAI_API_KEY)
+    modelInstance = LLM(guid , prompt_generator, LLM_API_KEY)
 
     await websocket.accept()
     try:
@@ -178,6 +198,7 @@ async def websocket_endpoint(
     source: SourceEnum,
     language: LanguageEnum | None = None,
     role: RoleEnum | None = None,
+    gender: GenderEnum | None = None,
     session_id: str | None = None,
     user_id: str = Query(..., description="Required user identifier for usage tracking")
 ):
@@ -187,19 +208,24 @@ async def websocket_endpoint(
         return
 
     user_id = user_id.strip()
-
-    # Use provided session_id if valid, otherwise generate new UUID
     if session_id and len(session_id) == 36:
         guid = session_id
     else:
         guid = str(uuid.uuid4())
 
-    print(f"WebSocket connection established via => {source.value} with UID => {guid} & user_id => {user_id[:8]}... & language => {language.value if language else 'en'} & role => {role.value if role else 'None'}")
+    language_value = language.value if language else "en"
+    role_value = role.value if role else "none"
+    observer = SessionObserver(guid, user_id, source.value)
+    observer.log(
+        "session",
+        "started",
+        language=language_value,
+        role=role_value,
+    )
 
-    prompt_generator = PromptGenerator(language, role)
-    modelInstance = LLM(guid, prompt_generator, OPENAI_API_KEY)
+    prompt_generator = PromptGenerator(language or LanguageEnum.english, role)
+    modelInstance = LLM(guid, prompt_generator, LLM_API_KEY)
 
-    # Initialize voice usage tracker
     voice_tracker = None
     voice_interceptor = None
     if VOICE_USAGE_ENABLED:
@@ -212,109 +238,192 @@ async def websocket_endpoint(
             )
             usage_summary = await voice_tracker.initialize()
             if not usage_summary.voice_enabled:
-                print(f"[VoiceUsage] User {user_id[:8]}... already at limit: {usage_summary.limit_reached}")
-
+                observer.log(
+                    "voice_usage",
+                    "limit_already_reached",
+                    limit=str(usage_summary.limit_reached),
+                )
             voice_interceptor = VoiceUsageInterceptor(
                 guid=guid,
                 tracker=voice_tracker,
                 dispatcher=dispatcher
             )
         except Exception as e:
-            print(f"❌ [ERROR] Failed to initialize voice tracker: {e}")
-            import traceback
-            traceback.print_exc()
+            observer.log("voice_usage", "init_error", error=str(e))
 
-    # Setup components
     websocket_manager = WebsocketManager(
-        guid, modelInstance, dispatcher, websocket, source,
-        voice_tracker=voice_tracker
+        guid,
+        modelInstance,
+        dispatcher,
+        websocket,
+        source,
+        voice_tracker=voice_tracker,
+        observer=observer,
     )
-    speech_to_text = SpeechToTextDeepgram(guid, dispatcher, websocket, DEEPGRAM_API_KEY, language=language.value, source=source.value)
-    large_language_model = LargeLanguageModel(guid, modelInstance, dispatcher, source.value)
-    text_to_speeech = TextToSpeechMinimax(
-        guid, dispatcher, MINIMAX_API_KEY,
-        voice_id=language.value,
-        voice_tracker=voice_tracker
+    def create_stt_component():
+        return SpeechToTextDeepgram(
+            guid,
+            dispatcher,
+            websocket,
+            DEEPGRAM_API_KEY,
+            language=language_value,
+            source=source.value,
+            observer=observer,
+        )
+    speech_to_text = create_stt_component()
+    large_language_model = LargeLanguageModel(
+        guid,
+        modelInstance,
+        dispatcher,
+        source.value,
+        observer=observer,
+        user_id=user_id,
+        mongodb_manager=mongodb_manager,
+        language=language_value,
+        role_value=role_value,
     )
 
-    tasks = []
+    gender_value = gender.value if gender else "female"
+
+    _VOICE_MAP = {
+        ("en",    "male"):   ("elevenlabs", "nPczCjzI2devNBz1zQrb"),
+        ("en",    "female"): ("elevenlabs", "hGQkZQUA5RiOXIw7P9iO"),
+        ("zh-TW", "male"):   ("minimax",    "Chinese (Mandarin)_Gentle_Youth"),
+        ("zh-TW", "female"): ("minimax",    "Chinese (Mandarin)_Gentle_Senior"),
+        ("zh-HK", "male"):   ("minimax",    "Cantonese_ProfessionalHost\uff08M)"),
+        ("zh-HK", "female"): ("minimax",    "Cantonese_GentleLady"),
+    }
+    _provider, _voice_id = _VOICE_MAP.get(
+        (language_value, gender_value),
+        ("minimax", "English_expressive_narrator"),
+    )
+
+    def create_tts_component():
+        if _provider == "elevenlabs":
+            return TextToSpeechElevenLabs(
+                guid,
+                dispatcher,
+                ELEVENLABS_API_KEY,
+                voice_id=_voice_id,
+                voice_tracker=voice_tracker,
+            )
+        return TextToSpeechMinimax(
+            guid,
+            dispatcher,
+            MINIMAX_API_KEY,
+            voice_id=_voice_id,
+            voice_tracker=voice_tracker,
+            observer=observer,
+        )
+
+    text_to_speech = create_tts_component()
+
+    tasks: dict[str, asyncio.Task] = {}
     error_occurred = None
-    
+    tts_retries_remaining = 1
+    stt_retries_remaining = 1
+
     try:
-        tasks = [
-            asyncio.create_task(speech_to_text.run_async(), name="STT"),
-            asyncio.create_task(large_language_model.run_async(), name="LLM"),
-            asyncio.create_task(text_to_speeech.run_async(), name="TTS"),
-            asyncio.create_task(websocket_manager.run_async(), name="WebSocket"),
-        ]
-
+        tasks["STT"] = asyncio.create_task(speech_to_text.run_async(), name="STT")
+        tasks["LLM"] = asyncio.create_task(large_language_model.run_async(), name="LLM")
+        tasks["TTS"] = asyncio.create_task(text_to_speech.run_async(), name="TTS")
+        tasks["WebSocket"] = asyncio.create_task(websocket_manager.run_async(), name="WebSocket")
         if voice_interceptor:
-            tasks.append(asyncio.create_task(voice_interceptor.run_async(), name="VoiceInterceptor"))
+            tasks["VoiceInterceptor"] = asyncio.create_task(voice_interceptor.run_async(), name="VoiceInterceptor")
 
-        # Wait for first task to complete or raise exception
-        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
-        
-        # Check if any task had an exception
-        for task in done:
-            try:
-                task.result()
-            except Exception as e:
-                error_occurred = e
-                print(f"❌ [ERROR] Task '{task.get_name()}' failed with exception:")
-                print(f"   {type(e).__name__}: {e}")
-                import traceback
-                traceback.print_exc()
-                break
+        shutdown = False
+        while tasks and not shutdown:
+            done, _ = await asyncio.wait(tasks.values(), return_when=asyncio.FIRST_COMPLETED)
+            for done_task in done:
+                task_name = next((name for name, task in tasks.items() if task is done_task), "unknown")
+                tasks.pop(task_name, None)
 
-        # Cancel pending tasks
-        if pending:
-            print(f"⚠️ Cancelling {len(pending)} pending tasks due to error or completion")
-            for task in pending:
-                print(f"   - Cancelling: {task.get_name()}")
-                task.cancel()
-            
-            await asyncio.gather(*pending, return_exceptions=True)
+                try:
+                    done_task.result()
+                    observer.log("session", "task_completed", task=task_name)
+                    if task_name in {"STT", "LLM", "WebSocket"}:
+                        shutdown = True
+                        break
+                except asyncio.CancelledError:
+                    observer.log("session", "task_cancelled", task=task_name)
+                except Exception as e:
+                    observer.log("session", "task_failed", task=task_name, error=str(e))
+                    if task_name == "STT":
+                        if stt_retries_remaining > 0:
+                            stt_retries_remaining -= 1
+                            observer.log("session", "stt_retrying", retries_left=stt_retries_remaining)
+                            speech_to_text = create_stt_component()
+                            tasks["STT"] = asyncio.create_task(speech_to_text.run_async(), name="STT")
+                            continue
+                        await dispatcher.broadcast(
+                            guid,
+                            Message(
+                                MessageHeader(MessageType.CALL_WEBSOCKET_PUT),
+                                data={
+                                    "is_text": True,
+                                    "is_transcription": False,
+                                    "is_end": True,
+                                    "msg": "Voice transcription is temporarily unavailable. You can keep chatting by text.",
+                                },
+                            ),
+                        )
+                        error_occurred = e
+                        shutdown = True
+                        break
 
-    except asyncio.CancelledError:
-        print(f"⚠️ [INFO] WebSocket tasks cancelled for session {guid[:8]}...")
-        await websocket_manager.dispose()
-        
+                    if task_name == "TTS":
+                        if tts_retries_remaining > 0:
+                            tts_retries_remaining -= 1
+                            observer.log("session", "tts_retrying", retries_left=tts_retries_remaining)
+                            text_to_speech = create_tts_component()
+                            tasks["TTS"] = asyncio.create_task(text_to_speech.run_async(), name="TTS")
+                            continue
+                        await dispatcher.broadcast(
+                            guid,
+                            Message(
+                                MessageHeader(MessageType.VOICE_DISABLED),
+                                data={"reason": "tts_unavailable"},
+                            ),
+                        )
+                        observer.log("session", "tts_degraded_to_text_only")
+                        continue
+
+                    error_occurred = e
+                    shutdown = True
+                    break
+
     except Exception as e:
         error_occurred = e
-        print(f"❌ [ERROR] Unexpected exception in WebSocket endpoint:")
-        print(f"   Session: {guid}")
-        print(f"   User: {user_id}")
-        print(f"   Error: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
-        
+        observer.log("session", "unexpected_error", error=str(e))
+    finally:
+        try:
+            await dispatcher.broadcast(
+                guid,
+                Message(MessageHeader(MessageType.CALL_ENDED), "Call ended"),
+            )
+        except Exception as e:
+            observer.log("session", "call_ended_broadcast_failed", error=str(e))
+
+        for pending_task in tasks.values():
+            pending_task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks.values(), return_exceptions=True)
+
         try:
             await websocket_manager.dispose()
-        except Exception as dispose_error:
-            print(f"❌ [ERROR] Failed to dispose websocket manager: {dispose_error}")
-            
-    finally:
-        # End voice usage session
+        except Exception as e:
+            observer.log("session", "websocket_dispose_error", error=str(e))
+
         if voice_tracker:
             try:
                 await voice_tracker.end_session()
             except Exception as e:
-                print(f"❌ [ERROR] Failed to end voice session: {e}")
+                observer.log("voice_usage", "end_session_error", error=str(e))
 
-        # Broadcast call ended
-        try:
-            await dispatcher.broadcast(
-                guid, Message(MessageHeader(MessageType.CALL_ENDED), "Call ended")
-            )
-        except Exception as e:
-            print(f"❌ [ERROR] Failed to broadcast call ended: {e}")
-        
-        # Log final status
         if error_occurred:
-            print(f"🔴 WebSocket session ended WITH ERRORS - GUID: {guid[:8]}..., User: {user_id[:8]}...")
-            print(f"   Error was: {type(error_occurred).__name__}: {error_occurred}")
+            observer.log("session", "ended_with_error", error=str(error_occurred))
         else:
-            print(f"✅ WebSocket session ended normally - GUID: {guid[:8]}..., User: {user_id[:8]}...")
+            observer.log("session", "ended")
             
 @app.get(
     '/api/info',
@@ -401,6 +510,7 @@ def health_check():
     """
     try:
         # Check MongoDB connection
+        mongodb_manager._ensure_connection()
         mongodb_manager.client.admin.command('ping')
         return {
             'status': 'healthy',

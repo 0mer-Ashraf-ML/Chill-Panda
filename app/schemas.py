@@ -3,6 +3,45 @@ from typing import List, Optional, Literal
 from datetime import datetime
 
 
+class PlaygroundParams(BaseModel):
+    """Optional parameters for prompt experimentation playground mode."""
+
+    temperature: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=2.0,
+        description="Sampling temperature (0-2). Higher = more creative."
+    )
+
+    max_tokens: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=128000,
+        description="Maximum tokens in the response."
+    )
+
+    presence_penalty: Optional[float] = Field(
+        default=None,
+        ge=-2.0,
+        le=2.0,
+        description="Presence penalty (-2 to 2). Higher = less repetition."
+    )
+
+    frequency_penalty: Optional[float] = Field(
+        default=None,
+        ge=-2.0,
+        le=2.0,
+        description="Frequency penalty (-2 to 2). Higher = more variety."
+    )
+
+    reasoning_effort: Optional[Literal[
+        "none", "minimal", "low", "medium", "high", "xhigh"
+    ]] = Field(
+        default=None,
+        description="Reasoning effort level for GPT-5 family models."
+    )
+
+
 class ChatRequest(BaseModel):
     """Request model for sending a chat message to Chill Panda."""
 
@@ -26,8 +65,13 @@ class ChatRequest(BaseModel):
 
     language: str = Field(
         default="en",
-        description="Language code for the response (en, french, zh-HK, zh-TW)",
-        examples=["en"]
+        description=(
+            "Language for the AI response. Supported values:\n"
+            "- `en` — English (default)\n"
+            "- `zh-HK` — Cantonese (Traditional Chinese, Hong Kong)\n"
+            "- `zh-TW` — Mandarin (Traditional Chinese, Taiwan)"
+        ),
+        examples=["en", "zh-HK", "zh-TW"]
     )
 
     role: Literal[
@@ -38,6 +82,22 @@ class ChatRequest(BaseModel):
         default="best_friend",
         description="Emotional role used by Chill Panda to respond",
         examples=["best_friend"]
+    )
+
+    # --- Playground Mode Fields (Optional) ---
+    custom_system_prompt: Optional[str] = Field(
+        default=None,
+        description="Custom system prompt to override the default. If None, uses the standard Chill Panda prompt."
+    )
+
+    model: Optional[str] = Field(
+        default=None,
+        description="Model ID to use (e.g., 'gpt-4.1-nano', 'gpt-4o'). If None, uses the default."
+    )
+
+    playground_params: Optional[PlaygroundParams] = Field(
+        default=None,
+        description="Custom model parameters for experimentation."
     )
 
     model_config = {
@@ -77,6 +137,10 @@ class ChatResponse(BaseModel):
         default=False,
         description="Whether RAG (Retrieval Augmented Generation) was used for the response"
     )
+    is_critical: bool = Field(
+        default=False,
+        description="Whether the latest user message was classified as crisis/self-harm risk"
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -85,7 +149,8 @@ class ChatResponse(BaseModel):
                     "reply": "Hello friend! I sense you're feeling a bit anxious. Let's practice the Turtle Breath together. Breathe in slowly for 4 counts, hold for 4, and exhale for 6. Remember, you are the Sky - thoughts are just passing clouds. 🐼",
                     "session_id": "123e4567-e89b-12d3-a456-426614174000",
                     "message_id": "65a1b2c3d4e5f6g7h8i9j0k1",
-                    "used_rag": True
+                    "used_rag": True,
+                    "is_critical": False
                 }
             ]
         }
@@ -134,6 +199,11 @@ class SessionInfo(BaseModel):
         ...,
         description="Total number of messages in this session",
         examples=[42]
+    )
+    title: Optional[str] = Field(
+        default=None,
+        description="Session title derived from the last user message (up to 100 chars)",
+        examples=["I've been feeling really anxious lately..."]
     )
 
 

@@ -1,10 +1,9 @@
 import base64
 import json
-from openai import OpenAI
-from .config import OPENAI_API_KEY
+from .llm_provider import apply_openrouter_request_overrides, create_sync_llm_client
 from .recommendation_service import get_stress_recommendations
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = create_sync_llm_client()
 
 VISION_PROMPT = """
 You are a mental health emotion detection assistant.
@@ -23,18 +22,20 @@ async def analyze_image_with_gpt4_vision(image_bytes: bytes, user_id: str):
     encoded_image = base64.b64encode(image_bytes).decode("utf-8")
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": VISION_PROMPT},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}}
-                ]
-            }
-        ],
-        max_tokens=300,
-        temperature=0.2
+        **apply_openrouter_request_overrides({
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": VISION_PROMPT},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encoded_image}"}}
+                    ]
+                }
+            ],
+            "max_tokens": 300,
+            "temperature": 0.2,
+        })
     )
 
     # Extract and parse the JSON response

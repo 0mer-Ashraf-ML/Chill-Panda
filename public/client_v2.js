@@ -1,6 +1,7 @@
 let chat_socket;
 let language = "en";
 let role = "loyal_best_friend";
+let gender = "female";
 let audioQueue = [];
 let isPlaying = false;
 let refreshMsgText = false;
@@ -349,9 +350,24 @@ window.addEventListener("load", () => {
     });
   }
 
+  const genderSelect = document.getElementById('gender-select');
+  if (genderSelect) {
+    const savedGender = localStorage.getItem('voice_engine_gender');
+    if (savedGender) {
+      genderSelect.value = savedGender;
+      gender = savedGender;
+    }
+
+    genderSelect.addEventListener('change', (e) => {
+      gender = e.target.value;
+      localStorage.setItem('voice_engine_gender', gender);
+      window.location.reload();
+    });
+  }
+
   // Include user_id in WebSocket URL (required for voice usage tracking)
   // Use 'web' source for browser MediaRecorder (WebM/Opus format)
-  const websocketUrl = getWebSocketURL(`/ws/web?language=${language}&role=${role}&session_id=${sessionUUID}&user_id=${userID}`);
+  const websocketUrl = getWebSocketURL(`/ws/web?language=${language}&role=${role}&gender=${gender}&session_id=${sessionUUID}&user_id=${userID}`);
   console.log({ websocketUrl, userID, sessionUUID });
 
   socket = new WebSocket(websocketUrl);
@@ -381,6 +397,16 @@ window.addEventListener("load", () => {
 
     if (event_parsed.type === 'voice_usage_warning') {
       handleVoiceWarning(event_parsed);
+      return;
+    }
+
+    if ('is_critical' in event_parsed) {
+      console.log('[CRISIS]', event_parsed.is_critical);
+      return;
+    }
+
+    if (event_parsed.audio_is_end) {
+      console.log('[AUDIO_END]');
       return;
     }
 

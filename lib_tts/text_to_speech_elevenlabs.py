@@ -3,6 +3,7 @@ import base64
 import json
 import re
 import websockets
+from websockets.exceptions import ConnectionClosed
 from lib_infrastructure.dispatcher import (
     Dispatcher, Message,
     MessageHeader, MessageType,
@@ -59,6 +60,12 @@ class TextToSpeechElevenLabs:
         
         # Interruption tracking
         self.is_interrupted = False
+        self._suppress_audio_complete = False
+        self._awaiting_audio_end = False
+        self._reply_active = False
+        self._audio_end_sent = False
+        self._last_audio_monotonic = None
+        self._audio_end_fallback_task = None
         
         # Audio listener task
         self.audio_listener_task = None
@@ -153,6 +160,7 @@ class TextToSpeechElevenLabs:
                         continue
                     
                     if data.get("audio"):
+                        self._last_audio_monotonic = asyncio.get_running_loop().time()
                         audio_data = data["audio"]
 
                         # Check voice usage limits before sending
@@ -174,9 +182,13 @@ class TextToSpeechElevenLabs:
                         )
                         print(f"🎵 Audio chunk broadcasted")
                         
-                    elif data.get('isFinal'):
-                        print("🏁 ElevenLabs audio generation complete for this segment")
-                        # DON'T break - keep listening for more audio
+                    if data.get('isFinal'):
+                        if self._suppress_audio_complete:
+                            self._suppress_audio_complete = False
+                            self._awaiting_audio_end = False
+                            self._reply_active = False
+                        elif self._awaiting_audio_end and not self.is_interrupted:
+                            await self._broadcast_audio_end()
                         continue
                         
                     elif data.get('error'):
@@ -196,7 +208,7 @@ class TextToSpeechElevenLabs:
                             self.is_initialized = False
                     continue
                     
-                except websockets.exceptions.ConnectionClosed:
+                except ConnectionClosed:
                     print("🔌 ElevenLabs WebSocket connection closed")
                     self.is_connected = False
                     self.is_initialized = False
@@ -243,7 +255,7 @@ class TextToSpeechElevenLabs:
             await self.websocket.send(json.dumps(message))
             print(f"📤 Sent: '{text.strip()[:30]}...' ({len(text.strip())} chars)")
             
-        except websockets.exceptions.ConnectionClosed:
+        except ConnectionClosed:
             print("❌ WebSocket closed while sending - will reconnect")
             self.is_connected = False
             self.is_initialized = False
@@ -327,12 +339,59 @@ class TextToSpeechElevenLabs:
     def _is_sentence_end(self, text: str) -> bool:
         return bool(re.search(r'[.!?]\s*$', text.strip()))
 
+    async def _broadcast_audio_end(self):
+        if self._audio_end_sent:
+            return
+
+        self._audio_end_sent = True
+        self._awaiting_audio_end = False
+        self._reply_active = False
+        if self._audio_end_fallback_task:
+            self._audio_end_fallback_task.cancel()
+            self._audio_end_fallback_task = None
+        print("🔔 Broadcasting audio_is_end")
+        await self.dispatcher.broadcast(
+            self.guid,
+            Message(
+                MessageHeader(MessageType.CALL_WEBSOCKET_PUT),
+                data={"audio_is_end": True},
+            ),
+        )
+
+    def _schedule_audio_end_fallback(self, *, idle_wait: float = 0.8, max_wait: float = 4.0):
+        if self._audio_end_fallback_task and not self._audio_end_fallback_task.done():
+            self._audio_end_fallback_task.cancel()
+
+        async def _runner():
+            started = asyncio.get_running_loop().time()
+            try:
+                while self._awaiting_audio_end and not self.is_interrupted and not self._audio_end_sent:
+                    now = asyncio.get_running_loop().time()
+                    if self._last_audio_monotonic is not None and (now - self._last_audio_monotonic) >= idle_wait:
+                        print("⏱️ audio_is_end fallback triggered from idle timeout")
+                        await self._broadcast_audio_end()
+                        return
+                    if (now - started) >= max_wait:
+                        print("⏱️ audio_is_end fallback triggered from hard timeout")
+                        await self._broadcast_audio_end()
+                        return
+                    await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                return
+
+        self._audio_end_fallback_task = asyncio.create_task(_runner())
+
     async def flush_and_end(self):
         """Send final flush and end signal"""
         async with self.buffer_lock:
             if self.word_buffer.strip() and not self.is_interrupted:
                 await self._flush_buffer_internal("final")
-        
+
+        if not self._reply_active:
+            return
+
+        self._awaiting_audio_end = True
+        self._schedule_audio_end_fallback()
         # Send generation end signal
         if self.is_connected and self.websocket:
             try:
@@ -343,6 +402,47 @@ class TextToSpeechElevenLabs:
                 await asyncio.sleep(0.3)
             except Exception as e:
                 print(f"❌ Error sending end signal: {e}")
+                await self._broadcast_audio_end()
+        else:
+            await self._broadcast_audio_end()
+
+    async def _interrupt_generation(self, send_clear_event: bool = True):
+        has_active_reply = self._reply_active or bool(self.word_buffer.strip())
+        if not has_active_reply:
+            return
+
+        self.is_interrupted = True
+        self._suppress_audio_complete = True
+        self._awaiting_audio_end = False
+        self._reply_active = False
+        self._audio_end_sent = False
+        self._last_audio_monotonic = None
+        if self._audio_end_fallback_task:
+            self._audio_end_fallback_task.cancel()
+            self._audio_end_fallback_task = None
+
+        async with self.buffer_lock:
+            self.word_buffer = ""
+
+        if self.buffer_timer:
+            self.buffer_timer.cancel()
+            self.buffer_timer = None
+
+        if self.is_connected and self.websocket:
+            try:
+                await self.websocket.send(json.dumps({"text": "", "flush": True}))
+                print("🛑 Sent flush to interrupt ElevenLabs")
+            except Exception as e:
+                print(f"❌ Error interrupting: {e}")
+
+        if send_clear_event:
+            await self.dispatcher.broadcast(
+                self.guid,
+                Message(
+                    MessageHeader(MessageType.CLEAR_EXISTING_BUFFER),
+                    data={"source": "tts_interrupt"},
+                )
+            )
 
     async def close_connection(self):
         """Close WebSocket connection gracefully"""
@@ -377,6 +477,14 @@ class TextToSpeechElevenLabs:
                 if is_audio_required and words:
                     # Reset interrupted flag - we're now processing a response
                     self.is_interrupted = False
+                    self._suppress_audio_complete = False
+                    self._reply_active = True
+                    self._awaiting_audio_end = False
+                    self._audio_end_sent = False
+                    self._last_audio_monotonic = None
+                    if self._audio_end_fallback_task:
+                        self._audio_end_fallback_task.cancel()
+                        self._audio_end_fallback_task = None
                     
                     if self.use_smart_buffering:
                         await self.add_word_to_buffer(words)
@@ -393,36 +501,9 @@ class TextToSpeechElevenLabs:
     async def handle_user_interruption(self):
         """Handle user interruption - listens for FINAL_TRANSCRIPTION_CREATED"""
         async with await self.dispatcher.subscribe(self.guid, MessageType.FINAL_TRANSCRIPTION_CREATED) as user_speech:
-            async for event in user_speech:
+            async for _event in user_speech:
                 print("🛑 USER SPOKE - Interrupting TTS")
-                
-                # Set interrupted flag
-                self.is_interrupted = True
-                
-                # Clear buffer
-                async with self.buffer_lock:
-                    self.word_buffer = ""
-                
-                if self.buffer_timer:
-                    self.buffer_timer.cancel()
-                    self.buffer_timer = None
-                
-                # Send flush to stop current generation
-                if self.is_connected and self.websocket:
-                    try:
-                        await self.websocket.send(json.dumps({"text": "", "flush": True}))
-                        print("🛑 Sent flush to interrupt ElevenLabs")
-                    except Exception as e:
-                        print(f"❌ Error interrupting: {e}")
-                
-                # Send clear to client
-                await self.dispatcher.broadcast(
-                    self.guid,
-                    Message(
-                        MessageHeader(MessageType.CLEAR_EXISTING_BUFFER),
-                        data={"source": "tts_interrupt"},
-                    )
-                )
+                await self._interrupt_generation(send_clear_event=False)
 
     async def run_async(self):
         """Main async runner"""
