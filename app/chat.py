@@ -105,11 +105,13 @@ class RAGChat:
 
         # Build parameters with defaults, allowing playground overrides
         params = playground_params or {}
+        default_max_tokens = 1000 if is_reasoning_model(selected_model) else 200
+        max_tokens = max(params.get("max_tokens") or default_max_tokens, default_max_tokens)
         api_params = build_api_params(
             model_id=selected_model,
             messages=messages,
             temperature=params.get("temperature", 0.7),
-            max_tokens=params.get("max_tokens", 200),
+            max_tokens=max_tokens,
             presence_penalty=params.get("presence_penalty", 0.3),
             frequency_penalty=params.get("frequency_penalty", 0.3),
             reasoning_effort=params.get("reasoning_effort"),
@@ -144,11 +146,13 @@ class RAGChat:
 
         # Build parameters with defaults, allowing playground overrides
         params = playground_params or {}
+        default_max_tokens = 1000 if is_reasoning_model(selected_model) else 300
+        max_tokens = max(params.get("max_tokens") or default_max_tokens, default_max_tokens)
         api_params = build_api_params(
             model_id=selected_model,
             messages=messages,
             temperature=params.get("temperature", 0.2),
-            max_tokens=params.get("max_tokens", 300),
+            max_tokens=max_tokens,
             presence_penalty=params.get("presence_penalty"),
             frequency_penalty=params.get("frequency_penalty"),
             reasoning_effort=params.get("reasoning_effort"),

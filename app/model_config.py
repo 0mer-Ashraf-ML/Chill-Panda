@@ -96,7 +96,7 @@ SUPPORTED_MODELS: Dict[str, ModelConfig] = {
         max_output_tokens=128000,
         uses_max_completion_tokens=True,
         supports_reasoning_effort=True,
-        reasoning_effort_levels=("none", "minimal", "low", "medium", "high"),
+        reasoning_effort_levels=("minimal", "low", "medium", "high"),
     ),
     "gpt-5-mini": ModelConfig(
         id="gpt-5-mini",
@@ -105,7 +105,7 @@ SUPPORTED_MODELS: Dict[str, ModelConfig] = {
         max_output_tokens=128000,
         uses_max_completion_tokens=True,
         supports_reasoning_effort=True,
-        reasoning_effort_levels=("none", "low", "medium", "high"),
+        reasoning_effort_levels=("low", "medium", "high"),
     ),
 
     # ==================
@@ -319,10 +319,16 @@ def get_default_params_for_model(model_id: str) -> Dict[str, Any]:
         defaults["frequency_penalty"] = 0.3
 
     # Cap max_tokens to model's limit
-    defaults["max_tokens"] = min(300, config.max_output_tokens)
+    if config.supports_reasoning_effort:
+        defaults["max_tokens"] = min(1000, config.max_output_tokens)
+    else:
+        defaults["max_tokens"] = min(300, config.max_output_tokens)
 
     # Add default reasoning effort for reasoning models
     if config.supports_reasoning_effort:
-        defaults["reasoning_effort"] = "none"
+        defaults["reasoning_effort"] = (
+            "none" if "none" in config.reasoning_effort_levels
+            else config.reasoning_effort_levels[0]
+        )
 
     return defaults
