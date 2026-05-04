@@ -8,6 +8,10 @@ from openai import AsyncOpenAI, OpenAI
 load_dotenv()
 
 OPENROUTER_BASE_URL_DEFAULT = "https://openrouter.ai/api/v1"
+OPENAI_REASONING_MODEL_PREFIXES = (
+    "gpt-5",
+    "openai/gpt-5",
+)
 
 
 def is_openrouter_enabled() -> bool:
@@ -88,7 +92,7 @@ def apply_openrouter_request_overrides(params: dict[str, Any]) -> dict[str, Any]
         return params
 
     model = str(params.get("model") or "")
-    if model.startswith("minimax/"):
+    if model.startswith("minimax/") or model.startswith(OPENAI_REASONING_MODEL_PREFIXES):
         return params
 
     updated = dict(params)
