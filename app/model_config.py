@@ -289,10 +289,14 @@ def build_api_params(
         else:
             params["max_tokens"] = max_tokens
 
-    # Handle reasoning effort (GPT-5 family only)
-    if config.supports_reasoning_effort and reasoning_effort is not None:
-        if reasoning_effort in config.reasoning_effort_levels:
-            params["reasoning_effort"] = reasoning_effort
+    # Handle reasoning effort (GPT-5 family only). Mandatory-reasoning models
+    # need an explicit low/minimal setting to avoid slow provider defaults.
+    if config.supports_reasoning_effort:
+        selected_effort = reasoning_effort
+        if selected_effort is None and config.reasoning_effort_levels:
+            selected_effort = config.reasoning_effort_levels[0]
+        if selected_effort in config.reasoning_effort_levels:
+            params["reasoning_effort"] = selected_effort
 
     return params
 

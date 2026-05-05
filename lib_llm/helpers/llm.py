@@ -63,6 +63,19 @@ class LLM:
         print(f"GPT_Model :> {self.model}")
 
 
+    def _apply_model_defaults(self, params: dict) -> dict:
+        if self.model == "gpt-5":
+            params["max_completion_tokens"] = 1000
+            params["reasoning_effort"] = "minimal"
+        elif self.model == "gpt-5-mini":
+            params["max_completion_tokens"] = 1000
+            params["reasoning_effort"] = "low"
+        elif self.model == "gpt-5.2-pro":
+            params["max_completion_tokens"] = 1000
+            params["reasoning_effort"] = "medium"
+        return params
+
+
     def reset(self):
         self.messages = []
         self.add_message(
@@ -86,14 +99,14 @@ class LLM:
         words = []
 
         stream = await self.client.chat.completions.create(
-            **apply_openrouter_request_overrides({
+            **apply_openrouter_request_overrides(self._apply_model_defaults({
                 "model": self.model,
                 "messages": self.messages,
                 "stream": True,
                 "tools": self.custom_functions,
                 "function_call": "auto",
                 "temperature": 0.3,
-            })
+            }))
         )
 
         function_name = None
@@ -130,7 +143,7 @@ class LLM:
             self.add_message(message)
 
         stream = await self.client.chat.completions.create(
-            **apply_openrouter_request_overrides({
+            **apply_openrouter_request_overrides(self._apply_model_defaults({
                 "model": self.model,
                 "messages": self.messages,
                 "stream": True,
@@ -138,7 +151,7 @@ class LLM:
                 "tool_choice": "auto",
                 "temperature": 0.3,
                 # response_format={ "type": "json_object" }
-            })
+            }))
         )
 
         words = []
