@@ -65,12 +65,19 @@ class LLM:
 
     def _apply_model_defaults(self, params: dict) -> dict:
         if self.model == "gpt-5":
+            params.pop("temperature", None)
             params["max_completion_tokens"] = 1000
             params["reasoning_effort"] = "minimal"
         elif self.model == "gpt-5-mini":
+            params.pop("temperature", None)
             params["max_completion_tokens"] = 1000
             params["reasoning_effort"] = "low"
+        elif self.model == "gpt-5.2":
+            params.pop("temperature", None)
+            params["max_completion_tokens"] = 1000
+            params["reasoning_effort"] = "none"
         elif self.model == "gpt-5.2-pro":
+            params.pop("temperature", None)
             params["max_completion_tokens"] = 1000
             params["reasoning_effort"] = "medium"
         return params
