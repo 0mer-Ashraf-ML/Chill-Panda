@@ -48,7 +48,7 @@ class LLM:
         def __str__(self) -> str:
             return f"{self.role.value}: {self.content}"
 
-    def __init__(self, guid , prompt_generator, api_key , model="4o-mini", custom_functions=None):
+    def __init__(self, guid , prompt_generator, api_key , model="gpt-5-mini", custom_functions=None):
         self.api_key = api_key
         self.guid = guid
         self.client = create_async_llm_client(self.api_key)

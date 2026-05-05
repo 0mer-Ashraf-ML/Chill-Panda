@@ -203,7 +203,7 @@ SUPPORTED_MODELS: Dict[str, ModelConfig] = {
 }
 
 # Default model if none specified
-DEFAULT_MODEL = "gpt-4.1-nano"
+DEFAULT_MODEL = "gpt-5-mini"
 
 
 def get_model_config(model_id: str) -> Optional[ModelConfig]:

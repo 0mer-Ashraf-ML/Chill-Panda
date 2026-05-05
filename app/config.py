@@ -33,7 +33,7 @@ CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:8501').split(',')
 # RAG Configuration
 RAG_SIMILARITY_THRESHOLD = float(os.getenv('RAG_SIMILARITY_THRESHOLD', '0.7'))
 EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'text-embedding-ada-002')
-OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-5-mini')
 
 # Voice Usage Limits Configuration (in minutes)
 VOICE_LIMIT_SESSION_MINUTES = int(os.getenv('VOICE_LIMIT_SESSION_MINUTES', '10'))  # 10 minutes per session
