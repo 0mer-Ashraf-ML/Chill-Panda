@@ -14,9 +14,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-client = create_sync_llm_client()
-
-
 class RAGChat:
     def __init__(self):
         self.embeddings = OpenAIEmbeddings(
@@ -119,6 +116,7 @@ class RAGChat:
         )
         api_params = apply_openrouter_request_overrides(api_params)
 
+        client = create_sync_llm_client(model=selected_model)
         response = client.chat.completions.create(**api_params)
 
         return response.choices[0].message.content.strip()
@@ -160,6 +158,7 @@ class RAGChat:
         )
         api_params = apply_openrouter_request_overrides(api_params)
 
+        client = create_sync_llm_client(model=selected_model)
         stream = client.chat.completions.create(**api_params)
 
         for chunk in stream:

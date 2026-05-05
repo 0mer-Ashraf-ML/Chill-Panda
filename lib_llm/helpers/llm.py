@@ -51,9 +51,9 @@ class LLM:
     def __init__(self, guid , prompt_generator, api_key , model="gpt-5-mini", custom_functions=None):
         self.api_key = api_key
         self.guid = guid
-        self.client = create_async_llm_client(self.api_key)
         self.prompt_generator = prompt_generator
         self.model = LLM.models.get(model, model)
+        self.client = create_async_llm_client(model=self.model)
         self.custom_functions = custom_functions or custom_functions
         self.function_responses = []
         

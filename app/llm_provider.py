@@ -12,30 +12,69 @@ OPENAI_REASONING_MODEL_PREFIXES = (
     "gpt-5",
     "openai/gpt-5",
 )
+OPENROUTER_MODEL_PREFIXES = (
+    "anthropic/",
+    "deepseek/",
+    "google/",
+    "minimax/",
+    "moonshotai/",
+    "openai/",
+    "qwen/",
+    "z-ai/",
+)
+OPENROUTER_MODEL_ALIASES = {
+    "claude-haiku-4.5",
+    "claude-sonnet-4.6",
+    "deepseek-v3.2",
+    "gemini-3-flash",
+    "glm-5.1",
+    "glm-5",
+    "gpt-5.4",
+    "kimi-k2.5",
+    "minimax-m2.7",
+    "qwen3.6-plus",
+}
 
 
-def is_openrouter_enabled() -> bool:
-    return bool(os.getenv("OPENROUTER_API_KEY"))
+def should_route_model_to_openrouter(model: Optional[str] = None) -> bool:
+    """Route explicit playground/provider model ids through OpenRouter."""
+    if not model:
+        return False
+
+    model_id = str(model)
+    return (
+        model_id in OPENROUTER_MODEL_ALIASES
+        or model_id.startswith(OPENROUTER_MODEL_PREFIXES)
+    )
 
 
-def get_llm_provider_name() -> str:
-    return "openrouter" if is_openrouter_enabled() else "openai"
+def is_openrouter_enabled(model: Optional[str] = None) -> bool:
+    return bool(os.getenv("OPENROUTER_API_KEY")) and should_route_model_to_openrouter(model)
 
 
-def get_llm_api_key(explicit_api_key: Optional[str] = None) -> str:
+def get_llm_provider_name(model: Optional[str] = None) -> str:
+    return "openrouter" if is_openrouter_enabled(model) else "openai"
+
+
+def get_llm_api_key(
+    explicit_api_key: Optional[str] = None,
+    model: Optional[str] = None,
+) -> str:
     if explicit_api_key:
         return explicit_api_key
-    return os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY", "")
+    if get_llm_provider_name(model) == "openrouter":
+        return os.getenv("OPENROUTER_API_KEY", "")
+    return os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY", "")
 
 
-def get_llm_base_url() -> Optional[str]:
-    if is_openrouter_enabled():
+def get_llm_base_url(model: Optional[str] = None) -> Optional[str]:
+    if get_llm_provider_name(model) == "openrouter":
         return os.getenv("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL_DEFAULT)
     return os.getenv("OPENAI_BASE_URL") or None
 
 
-def get_llm_default_headers() -> Optional[dict[str, str]]:
-    if not is_openrouter_enabled():
+def get_llm_default_headers(model: Optional[str] = None) -> Optional[dict[str, str]]:
+    if get_llm_provider_name(model) != "openrouter":
         return None
 
     headers: dict[str, str] = {}
@@ -50,32 +89,38 @@ def get_llm_default_headers() -> Optional[dict[str, str]]:
     return headers or None
 
 
-def get_openai_client_kwargs(explicit_api_key: Optional[str] = None) -> dict[str, Any]:
+def get_openai_client_kwargs(
+    explicit_api_key: Optional[str] = None,
+    model: Optional[str] = None,
+) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
-        "api_key": get_llm_api_key(explicit_api_key),
+        "api_key": get_llm_api_key(explicit_api_key, model),
     }
 
-    base_url = get_llm_base_url()
+    base_url = get_llm_base_url(model)
     if base_url:
         kwargs["base_url"] = base_url
 
-    default_headers = get_llm_default_headers()
+    default_headers = get_llm_default_headers(model)
     if default_headers:
         kwargs["default_headers"] = default_headers
 
     return kwargs
 
 
-def get_embedding_client_kwargs(explicit_api_key: Optional[str] = None) -> dict[str, Any]:
+def get_embedding_client_kwargs(
+    explicit_api_key: Optional[str] = None,
+    model: Optional[str] = None,
+) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
-        "api_key": get_llm_api_key(explicit_api_key),
+        "api_key": get_llm_api_key(explicit_api_key, model),
     }
 
-    base_url = get_llm_base_url()
+    base_url = get_llm_base_url(model)
     if base_url:
         kwargs["base_url"] = base_url
 
-    default_headers = get_llm_default_headers()
+    default_headers = get_llm_default_headers(model)
     if default_headers:
         kwargs["default_headers"] = default_headers
 
@@ -88,10 +133,10 @@ def apply_openrouter_request_overrides(params: dict[str, Any]) -> dict[str, Any]
 
     OpenRouter normalizes this setting for providers that support reasoning.
     """
-    if not is_openrouter_enabled():
+    model = str(params.get("model") or "")
+    if not is_openrouter_enabled(model):
         return params
 
-    model = str(params.get("model") or "")
     if model.startswith("minimax/") or model.startswith(OPENAI_REASONING_MODEL_PREFIXES):
         return params
 
@@ -104,9 +149,15 @@ def apply_openrouter_request_overrides(params: dict[str, Any]) -> dict[str, Any]
     return updated
 
 
-def create_sync_llm_client(explicit_api_key: Optional[str] = None) -> OpenAI:
-    return OpenAI(**get_openai_client_kwargs(explicit_api_key))
+def create_sync_llm_client(
+    explicit_api_key: Optional[str] = None,
+    model: Optional[str] = None,
+) -> OpenAI:
+    return OpenAI(**get_openai_client_kwargs(explicit_api_key, model))
 
 
-def create_async_llm_client(explicit_api_key: Optional[str] = None) -> AsyncOpenAI:
-    return AsyncOpenAI(**get_openai_client_kwargs(explicit_api_key))
+def create_async_llm_client(
+    explicit_api_key: Optional[str] = None,
+    model: Optional[str] = None,
+) -> AsyncOpenAI:
+    return AsyncOpenAI(**get_openai_client_kwargs(explicit_api_key, model))

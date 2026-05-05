@@ -8,8 +8,8 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 OPENROUTER_BASE_URL = os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
-LLM_PROVIDER = 'openrouter' if OPENROUTER_API_KEY else 'openai'
-LLM_API_KEY = OPENROUTER_API_KEY or OPENAI_API_KEY
+LLM_PROVIDER = 'openai' if OPENAI_API_KEY else 'openrouter'
+LLM_API_KEY = OPENAI_API_KEY or OPENROUTER_API_KEY
 BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:8000')
 
 # Database Configuration
