@@ -105,15 +105,18 @@ class LLM:
 
         words = []
 
+        api_params = {
+            "model": self.model,
+            "messages": self.messages,
+            "stream": True,
+            "temperature": 0.3,
+        }
+        if self.custom_functions:
+            api_params["tools"] = self.custom_functions
+            api_params["tool_choice"] = "auto"
+
         stream = await self.client.chat.completions.create(
-            **apply_openrouter_request_overrides(self._apply_model_defaults({
-                "model": self.model,
-                "messages": self.messages,
-                "stream": True,
-                "tools": self.custom_functions,
-                "function_call": "auto",
-                "temperature": 0.3,
-            }))
+            **apply_openrouter_request_overrides(self._apply_model_defaults(api_params))
         )
 
         function_name = None
